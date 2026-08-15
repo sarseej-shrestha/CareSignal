@@ -1,0 +1,75 @@
+// CareSignal — Prisma schema
+// SQLite for hackathon speed; swappable to Postgres later by changing the datasource.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id          String       @id @default(uuid())
+  mrn         String       @unique
+  firstName   String
+  lastName    String
+  phone       String       @unique
+  cancerType  String
+  chemoCycle  String
+  parish      String // e.g. "Terrebonne", "Lafourche"
+  riskStatus  String       @default("GREEN") // GREEN, YELLOW, RED
+  riskScore   Float        @default(0) // model probability 0-1
+  caregiver   Caregiver?
+  symptomLogs SymptomLog[]
+  alerts      RiskAlert[]
+  createdAt   DateTime     @default(now())
+}
+
+model Caregiver {
+  id            String         @id @default(uuid())
+  firstName     String
+  lastName      String
+  phone         String         @unique
+  relationship  String
+  patientId     String         @unique
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  caregiverLogs CaregiverLog[]
+}
+
+model SymptomLog {
+  id         String   @id @default(uuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  pain       Int
+  nausea     Int
+  fatigue    Int
+  fever      Float
+  rawSmsText String?
+  parsedByAi Boolean  @default(false) // true if LLM-parsed from freeform text
+  source     String   @default("PATIENT_SMS") // PATIENT_SMS, CAREGIVER_SMS, WEB
+  createdAt  DateTime @default(now())
+}
+
+model CaregiverLog {
+  id            String    @id @default(uuid())
+  caregiverId   String
+  caregiver     Caregiver @relation(fields: [caregiverId], references: [id])
+  patientStatus Int // 1-5
+  copingScore   Int // 1-5, 1 = overwhelmed
+  rawSmsText    String?
+  createdAt     DateTime  @default(now())
+}
+
+model RiskAlert {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id])
+  level     String // YELLOW, RED, CAREGIVER_BURDEN
+  reasons   String // JSON array of human-readable reasons
+  modelProb Float? // classifier output, if applicable
+  status    String   @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED
+  soapNote  String?
+  createdAt DateTime @default(now())
+}
