@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { assessRisk } from "../lib/risk";
 import type { DailySymptoms } from "../lib/riskEngine";
 import { patients, daysAgo, type SeedCaregiverDay } from "../lib/seedData";
+import { computeHospitalizationRisk } from "../lib/hospitalizationRisk";
 
 const prisma = new PrismaClient();
 
@@ -116,6 +117,9 @@ async function main() {
         });
       }
     }
+
+    const hosp = await computeHospitalizationRisk(patient.id);
+    await prisma.patient.update({ where: { id: patient.id }, data: { hospitalizationRiskScore: hosp.score } });
   }
 
   console.log("Seed complete.");

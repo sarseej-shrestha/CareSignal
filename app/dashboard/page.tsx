@@ -1,5 +1,23 @@
 import { prisma } from "@/lib/db";
+import { computeHospitalizationRisk } from "@/lib/hospitalizationRisk";
+import type { HospitalizationInputs } from "@/lib/hospitalizationFeatures";
 import { DashboardClient, type DashboardPatient } from "./DashboardClient";
+
+// Human-readable contributing factors for the hospitalization-risk panel —
+// recomputed here (not read back from the stored score) so the "why" always
+// matches the live inputs, same spirit as RiskBadge's reasons list but for
+// a different model/question. Thresholds are descriptive, not clinical
+// cutoffs — see docs/model-calibration.md for the trained feature weights.
+function hospitalizationFactors(inputs: HospitalizationInputs): string[] {
+  const factors: string[] = [];
+  if (inputs.caregiverBurdenFlag7d === 1) factors.push("Caregiver burden alert in the past 7 days");
+  if (inputs.alertCount7d >= 2) factors.push(`${inputs.alertCount7d} clinical alerts in the past 7 days`);
+  if (inputs.feverRecurrenceCount7d >= 1) factors.push(`Fever recurrence on ${inputs.feverRecurrenceCount7d} day(s)`);
+  if (inputs.severeDayCount7d >= 2) factors.push(`${inputs.severeDayCount7d} days of near-severe symptoms`);
+  if (inputs.maxTrendDelta7d >= 3) factors.push("A sharp single-day symptom escalation this week");
+  if (inputs.avgDailyModelProb7d >= 0.3) factors.push("Sustained elevated daily risk across the week");
+  return factors;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +35,12 @@ export default async function DashboardPage() {
     orderBy: { createdAt: "asc" },
   });
 
-  const dashboardPatients: DashboardPatient[] = patients.map((p) => {
+  const hospResults = await Promise.all(patients.map((p) => computeHospitalizationRisk(p.id)));
+
+  const dashboardPatients: DashboardPatient[] = patients.map((p, idx) => {
     const clinicalAlert = p.alerts.find((a) => a.level === "YELLOW" || a.level === "RED");
     const burdenAlert = p.alerts.find((a) => a.level === "CAREGIVER_BURDEN");
+    const hosp = hospResults[idx];
 
     return {
       id: p.id,
@@ -31,6 +52,8 @@ export default async function DashboardPage() {
       riskStatus: p.riskStatus as "GREEN" | "YELLOW" | "RED",
       riskScore: p.riskScore,
       hasCaregiverBurden: !!burdenAlert,
+      hospitalizationRiskScore: hosp.score,
+      hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
       reasons: clinicalAlert ? (JSON.parse(clinicalAlert.reasons) as string[]) : [],
       logs: p.symptomLogs.map((log) => ({
         date: log.createdAt.toISOString(),
