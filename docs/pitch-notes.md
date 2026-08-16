@@ -73,6 +73,14 @@ Both languages are *standard* French and *standard* Spanish, not any regional di
 - **SDOH transportation card:** a triggered, parish-specific suggestion (not a booking flow) — this is about removing the "how do I even get to the clinic" barrier the brief calls out, not building a scheduling product in a hackathon.
 - **FHIR-lite export:** downloads a patient's data as FHIR-shaped resources (Patient, Condition, Observation, RiskAssessment, Flag). If asked "is this really FHIR": "It uses real FHIR resource types and real, individually verified LOINC codes where a matching one exists — we checked, we didn't guess. Where no matching code exists (there's no standard 0-10 nausea-severity LOINC code), we say so explicitly and use a local code instead of making one up. It hasn't been validated against the full FHIR spec — it's a demonstration that we understand what real interoperability requires, not a certified integration."
 
+## Nurse workload — "have you thought about alert volume"
+
+This is real pitch material, not an afterthought — most monitoring-tool pitches get asked "won't this just flood the nurse with alerts" and don't have a computed answer ready.
+
+- Daily clinical risk and 7-day hospitalization risk are now consolidated into **one notification per patient** (`lib/alertConsolidation.ts`), not two separate queue items — the dashboard queue shows a "+ 7-day risk" tag on a patient's existing row when both signals are elevated, instead of a second row.
+- **Computed, not guessed:** for a 75-patient panel (middle of a realistic 50-100 range), a nurse reviews an estimated **~20 consolidated notifications per day**, about a quarter of which are the higher-priority dual-signal case. That's a real ~20% reduction versus treating the two signals separately (25.6 → 20.4 items/day at that panel size). Full numbers and method in `docs/alert-volume-analysis.md`.
+- **Found and fixed a real calibration mistake while building this**, worth mentioning if asked how confident to be in the number: the hospitalization-alert threshold was first set by eyeballing the seeded demo patients' scores (0.35 looked reasonable against those 7). Checked against the full simulated population instead, and that threshold fired on ~60% of all patient-days — useless as an "elevated" signal. Fixed by pinning it to the model's own trained decision boundary instead of a hand-picked number. Say this if asked "how do you know your alert threshold is right": "We checked it against more than the demo data, and the first number we picked was wrong by a lot — worth knowing before deployment, not after."
+
 ## If asked about testing / robustness
 
 - 93 automated tests (Vitest) — unit tests for every risk-engine rule boundary, both trained models, the AI parsing (mocked), and integration tests hitting the actual webhook logic against a real test database.
