@@ -1,17 +1,19 @@
-// Offline trainer for the hospitalization-risk model — a SECOND, separate
-// classifier from scripts/train-risk-model.ts. Different question, different
-// time horizon: not "what's today's symptom severity" but "how likely is
-// this patient to be hospitalized in the next 7 days," built from ROLLING
-// 7-day aggregates (cumulative alerts, fever recurrence, sustained trend
-// severity, average daily risk, caregiver-burden history) rather than a
-// single day's readings.
+// Offline trainer for the hospitalization-risk model — rewritten to remove
+// training-data circularity with the daily risk model (see
+// lib/independentPatientSimulator.ts for the full rationale).
 //
-// Simulates at the level of the aggregate features themselves (rather than
-// re-simulating raw daily logs and rolling them up, which would mean running
-// the daily model thousands of times for no added realism here) — each
-// simulated example is one "patient-week" snapshot: the 6 rolling features
-// as of some day, and whether a hospitalization event is injected in the
-// following 7 days.
+// Raw day-by-day patient timelines come from a genuinely independent
+// simulator (different RNG algorithm, continuous hidden-state dynamics
+// instead of discrete severity tiers, a hospitalization ground-truth
+// process that doesn't reference the daily model at all). This script then
+// derives every 7-day rolling feature — including avgDailyModelProb7d — by
+// actually running those raw simulated logs through the REAL,
+// already-independently-trained daily risk engine (lib/risk.ts) and
+// classifier (lib/riskModel.ts), exactly as production does. That's
+// legitimate reuse of a fixed, already-trained artifact, not the
+// circularity being fixed — the circularity was in how the RAW DATA and
+// the HOSPITALIZATION LABEL were generated, not in reusing real feature-
+// computation logic.
 //
 // Run: npx tsx scripts/train-hospitalization-model.ts
 // Output: lib/hospitalization-model-coefficients.json
@@ -19,121 +21,95 @@
 import { writeFileSync } from "fs";
 import { join } from "path";
 import { HOSP_FEATURE_NAMES, toFeatureVector, type HospitalizationInputs } from "../lib/hospitalizationFeatures";
-
-let rngState = 1337;
-function rng(): number {
-  rngState |= 0;
-  rngState = (rngState + 0x6d2b79f5) | 0;
-  let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-}
-function randRange(min: number, max: number): number {
-  return min + rng() * (max - min);
-}
-function clamp(v: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, v));
-}
-
-interface Tier {
-  name: string;
-  weight: number;
-  alertCountRange: [number, number];
-  feverRecurrenceRange: [number, number];
-  severeDayRange: [number, number];
-  trendDeltaRange: [number, number];
-  avgDailyProbRange: [number, number];
-  baseCaregiverBurdenProb: number;
-  baseHospProb: number; // baseline hospitalization probability for this tier before the caregiver-burden boost
-}
-
-// Three rolling-window severity tiers, mirroring the daily model's persona
-// structure but at the aggregate level: most patient-weeks are low-burden,
-// a minority run persistently rockier, and a small minority are actively
-// escalating (multiple alerts + fever recurrence + a hard trend spike).
-const TIERS: Tier[] = [
-  {
-    name: "low",
-    weight: 0.6,
-    alertCountRange: [0, 1],
-    feverRecurrenceRange: [0, 0],
-    severeDayRange: [0, 1],
-    trendDeltaRange: [0, 2],
-    avgDailyProbRange: [0, 0.15],
-    baseCaregiverBurdenProb: 0.05,
-    baseHospProb: 0.01,
-  },
-  {
-    name: "moderate",
-    weight: 0.27,
-    alertCountRange: [1, 3],
-    feverRecurrenceRange: [0, 1],
-    severeDayRange: [1, 3],
-    trendDeltaRange: [1, 4],
-    avgDailyProbRange: [0.15, 0.45],
-    baseCaregiverBurdenProb: 0.15,
-    baseHospProb: 0.08,
-  },
-  {
-    name: "high",
-    weight: 0.13,
-    alertCountRange: [3, 7],
-    feverRecurrenceRange: [1, 3],
-    severeDayRange: [2, 6],
-    trendDeltaRange: [3, 7],
-    avgDailyProbRange: [0.45, 0.9],
-    baseCaregiverBurdenProb: 0.3,
-    baseHospProb: 0.3,
-  },
-];
-
-function pickTier(): Tier {
-  const r = rng();
-  let cumulative = 0;
-  for (const t of TIERS) {
-    cumulative += t.weight;
-    if (r <= cumulative) return t;
-  }
-  return TIERS[TIERS.length - 1];
-}
-
-// The caregiver-burden flag contributes an INDEPENDENT probability boost on
-// top of the tier's baseline — not merely a byproduct of patient severity.
-// This encodes the stated reasoning explicitly (see
-// lib/hospitalizationFeatures.ts and docs/model-calibration.md): a
-// caregiver losing coping capacity is treated as its own leading indicator,
-// not a restatement of how sick the patient already looks on paper.
-const CAREGIVER_BURDEN_HOSP_BOOST = 0.12;
+import { assessRisk } from "../lib/risk";
+import { predictRiskProbability } from "../lib/riskModel";
+import type { DailySymptoms } from "../lib/riskEngine";
+import { simulateIndependentTimeline } from "../lib/independentPatientSimulator";
 
 interface TrainingExample {
   features: number[];
   label: number;
 }
 
-function simulateExample(): TrainingExample {
-  const tier = pickTier();
-  const inputs: HospitalizationInputs = {
-    alertCount7d: Math.round(randRange(...tier.alertCountRange)),
-    feverRecurrenceCount7d: Math.round(randRange(...tier.feverRecurrenceRange)),
-    severeDayCount7d: Math.round(randRange(...tier.severeDayRange)),
-    maxTrendDelta7d: clamp(randRange(...tier.trendDeltaRange), 0, 10),
-    avgDailyModelProb7d: clamp(randRange(...tier.avgDailyProbRange), 0, 1),
-    caregiverBurdenFlag7d: rng() < tier.baseCaregiverBurdenProb ? 1 : 0,
-  };
+const WINDOW = 7;
 
-  const hospProb = clamp(
-    tier.baseHospProb + inputs.caregiverBurdenFlag7d * CAREGIVER_BURDEN_HOSP_BOOST,
-    0,
-    0.97
-  );
-  let label = rng() < hospProb ? 1 : 0;
-  if (rng() < 0.02) label = 1 - label; // small label noise, same rationale as the daily model
+function buildExamplesForPatient(seed: number, numDays: number): TrainingExample[] {
+  const { days, hospitalizedOnsetDay } = simulateIndependentTimeline(seed, numDays);
 
-  return { features: toFeatureVector(inputs), label };
+  // Walk forward once, computing the REAL daily assessment (rules + trained
+  // classifier) for each day from the history available as of that day —
+  // exactly what recordSymptomLog does live. Cached per day so each 7-day
+  // window just looks these up instead of recomputing.
+  const history: DailySymptoms[] = [];
+  const dailyLevel: ("GREEN" | "YELLOW" | "RED")[] = [];
+  const dailyModelProb: number[] = [];
+
+  for (const day of days) {
+    history.push({ pain: day.pain, nausea: day.nausea, fatigue: day.fatigue, fever: day.fever, createdAt: new Date() });
+    const assessment = assessRisk(history);
+    dailyLevel.push(assessment.level);
+    dailyModelProb.push(assessment.modelProb);
+  }
+
+  const examples: TrainingExample[] = [];
+
+  for (let t = WINDOW - 1; t < days.length; t++) {
+    const windowStart = t - (WINDOW - 1);
+
+    let alertCount7d = 0;
+    let feverRecurrenceCount7d = 0;
+    let severeDayCount7d = 0;
+    let maxTrendDelta7d = 0;
+    let modelProbSum = 0;
+    let burdenFlag = 0;
+
+    for (let d = windowStart; d <= t; d++) {
+      if (dailyLevel[d] === "YELLOW" || dailyLevel[d] === "RED") alertCount7d++;
+      if (days[d].fever >= 100.4) feverRecurrenceCount7d++;
+      if (days[d].pain >= 7 || days[d].nausea >= 7) severeDayCount7d++;
+      modelProbSum += dailyModelProb[d];
+      if (days[d].copingScore <= 2) burdenFlag = 1;
+
+      // Same trend definition as lib/hospitalizationRisk.ts: each day
+      // compared against ITS OWN trailing 2-day average, using the full
+      // history up to that day (not clipped to the current 7-day window).
+      const priorTwo = days.slice(Math.max(0, d - 2), d);
+      if (priorTwo.length > 0) {
+        const avgPain = priorTwo.reduce((a, l) => a + l.pain, 0) / priorTwo.length;
+        const avgNausea = priorTwo.reduce((a, l) => a + l.nausea, 0) / priorTwo.length;
+        maxTrendDelta7d = Math.max(maxTrendDelta7d, days[d].pain - avgPain, days[d].nausea - avgNausea);
+      }
+    }
+
+    const inputs: HospitalizationInputs = {
+      alertCount7d,
+      feverRecurrenceCount7d,
+      severeDayCount7d,
+      maxTrendDelta7d,
+      avgDailyModelProb7d: modelProbSum / WINDOW,
+      caregiverBurdenFlag7d: burdenFlag,
+    };
+
+    // Ground truth: did the INDEPENDENT hidden-state process hospitalize
+    // this patient within the 7 days AFTER day t? No reference to
+    // dailyLevel/dailyModelProb here — that's the whole point.
+    const label = hospitalizedOnsetDay !== null && hospitalizedOnsetDay > t && hospitalizedOnsetDay <= t + WINDOW ? 1 : 0;
+
+    examples.push({ features: toFeatureVector(inputs), label });
+  }
+
+  return examples;
 }
 
-function generateDataset(n: number): TrainingExample[] {
-  return Array.from({ length: n }, () => simulateExample());
+function generateDataset(nPatients: number, daysPerPatient: number): TrainingExample[] {
+  const dataset: TrainingExample[] = [];
+  for (let i = 0; i < nPatients; i++) {
+    // Distinct seed per patient, offset from the daily model's training
+    // seed range (42) and the original hospitalization trainer's seed
+    // (1337) so there's no accidental overlap in the PRNG's state space.
+    dataset.push(...buildExamplesForPatient(500_000 + i * 97, daysPerPatient));
+  }
+  return dataset;
 }
 
 function standardize(dataset: TrainingExample[]) {
@@ -164,7 +140,7 @@ function trainLogisticRegression(dataset: TrainingExample[], epochs: number, lr:
 
   const nPos = dataset.filter((ex) => ex.label === 1).length;
   const nNeg = n - nPos;
-  const posWeight = Math.min(6, nNeg / Math.max(1, nPos));
+  const posWeight = Math.min(8, nNeg / Math.max(1, nPos));
 
   for (let epoch = 0; epoch < epochs; epoch++) {
     const gradW = new Array(nFeatures).fill(0);
@@ -203,14 +179,35 @@ function evaluate(dataset: { features: number[]; label: number }[], weights: num
   return { tp, fp, tn, fn, precision, recall, accuracy, positiveRate };
 }
 
-function main() {
-  console.log("Simulating hospitalization-risk training data...");
-  const nExamples = 20000;
-  const fullDataset = generateDataset(nExamples);
-  const positiveRate = fullDataset.filter((e) => e.label === 1).length / fullDataset.length;
-  console.log(`Generated ${fullDataset.length} patient-week examples. Positive (hospitalization) rate: ${(positiveRate * 100).toFixed(1)}%`);
+// Deterministic shuffle, separate from the training loop's own RNG concerns
+// (this is just for the train/test split, not part of the simulation).
+function shuffle<T>(arr: T[], seed: number): T[] {
+  let state = seed || 12345;
+  const rand = () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state |= 0;
+    return ((state >>> 0) % 1_000_000) / 1_000_000;
+  };
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
-  const shuffled = [...fullDataset].sort(() => rng() - 0.5);
+function main() {
+  console.log("Simulating hospitalization-risk training data from the INDEPENDENT simulator...");
+  const nPatients = 6000;
+  const daysPerPatient = 35;
+  const fullDataset = generateDataset(nPatients, daysPerPatient);
+  const positiveRate = fullDataset.filter((e) => e.label === 1).length / fullDataset.length;
+  console.log(`Generated ${fullDataset.length} patient-day examples from ${nPatients} independently-simulated patients.`);
+  console.log(`Positive (hospitalization) rate: ${(positiveRate * 100).toFixed(1)}%`);
+
+  const shuffled = shuffle(fullDataset, 777);
   const splitIdx = Math.floor(shuffled.length * 0.8);
   const trainRaw = shuffled.slice(0, splitIdx);
   const testRaw = shuffled.slice(splitIdx);
@@ -219,7 +216,7 @@ function main() {
   const testStd = testRaw.map((ex) => ({ features: ex.features.map((v, j) => (v - means[j]) / stds[j]), label: ex.label }));
 
   console.log("Training logistic regression...");
-  const { weights, bias, posWeight } = trainLogisticRegression(trainStd, 800, 0.5, 0.0005);
+  const { weights, bias, posWeight } = trainLogisticRegression(trainStd, 400, 0.5, 0.001);
   console.log(`Positive-class weight used: ${posWeight.toFixed(2)}`);
 
   const trainMetrics = evaluate(trainStd, weights, bias);
@@ -232,6 +229,7 @@ function main() {
 
   const output = {
     trainedAt: new Date().toISOString(),
+    simulatorVersion: "independent-v1", // see lib/independentPatientSimulator.ts
     featureNames: HOSP_FEATURE_NAMES,
     weights,
     bias,
@@ -239,10 +237,11 @@ function main() {
     featureStds: stds,
     threshold: 0.5,
     trainingMeta: {
-      nExamples,
+      nPatients,
+      daysPerPatient,
+      nExamples: fullDataset.length,
       positiveRate,
       testMetrics,
-      caregiverBurdenHospBoost: CAREGIVER_BURDEN_HOSP_BOOST,
     },
   };
 
