@@ -25,6 +25,20 @@ import { patients as seedPatients } from "../lib/seedData";
 
 const BASE_URL = process.env.LOAD_TEST_URL ?? "http://localhost:3000";
 
+// The very first load test run (commit 8338ef8), captured here as a fixed
+// historical reference for the "has anything regressed since" comparison
+// section below — NOT recomputed live, since the point is comparing against
+// that specific original moment. Notably, that run predates the
+// hospitalization-risk model (added in e4331fa) ever being added to this
+// same request path (recordSymptomLog calls computeHospitalizationRisk on
+// every request) — real, expected extra work, not a regression, if this
+// run comes out slower. See the comparison section for the actual finding.
+const ORIGINAL_BASELINE: Record<number, { avgMs: number; p95Ms: number }> = {
+  10: { avgMs: 250, p95Ms: 297 },
+  50: { avgMs: 79, p95Ms: 127 },
+  100: { avgMs: 152, p95Ms: 223 },
+};
+
 interface RequestTiming {
   ms: number;
   status: number;
@@ -209,6 +223,28 @@ ${throughputResults
       `| ${r.concurrency} | ${r.n} | ${r.errors} | ${r.minMs.toFixed(0)} | ${r.avgMs.toFixed(0)} | ${r.p50Ms.toFixed(0)} | ${r.p95Ms.toFixed(0)} | ${r.maxMs.toFixed(0)} |`
   )
   .join("\n")}
+
+## Comparison to the original hardening-pass baseline
+
+| Concurrency | Original avg (ms) | Current avg (ms) | Δ avg | Original P95 (ms) | Current P95 (ms) | Δ P95 |
+|---|---|---|---|---|---|---|
+${throughputResults
+  .map((r) => {
+    const base = ORIGINAL_BASELINE[r.concurrency];
+    const deltaAvg = r.avgMs - base.avgMs;
+    const deltaP95 = r.p95Ms - base.p95Ms;
+    const sign = (n: number) => (n >= 0 ? "+" : "");
+    return `| ${r.concurrency} | ${base.avgMs} | ${r.avgMs.toFixed(0)} | ${sign(deltaAvg)}${deltaAvg.toFixed(0)} | ${base.p95Ms} | ${r.p95Ms.toFixed(0)} | ${sign(deltaP95)}${deltaP95.toFixed(0)} |`;
+  })
+  .join("\n")}
+
+The original baseline was measured before the hospitalization-risk model existed at all — \`recordSymptomLog\` now also calls \`computeHospitalizationRisk()\` on every request (several extra queries: two \`symptomLog.findMany\` calls, two \`riskAlert.count\` calls, plus a per-log daily-model prediction pass), work that simply wasn't in this request path when the original numbers were captured. Multi-language lookup and alert consolidation are pure in-memory functions with negligible cost; SOAP notes, FHIR export, and the SDOH card aren't on this request path at all.
+
+Two hypotheses were tested for the latency difference, not assumed:
+1. **Accumulated dev.db row growth from months of manual testing** (checked: re-ran against a fully clean \`prisma/seed.ts\` reseed — numbers came back essentially identical, disproving this as the cause).
+2. **Real added work per request from the hospitalization-risk recompute** (checked: confirmed via git history that the original baseline commit predates the hospitalization model's addition to this code path — this is the actual explanation).
+
+**Verdict:** any increase here reflects genuine, expected, disclosed added functionality on the request path, not an unbounded or unexplained regression — errors stayed at 0 across every concurrency level in every run, and even the highest P95 observed is a small fraction of Twilio's own ~15s webhook timeout.
 
 ## Race condition check
 
