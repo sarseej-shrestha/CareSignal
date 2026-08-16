@@ -69,6 +69,7 @@ async function ensurePatient(seed: SeedPatient) {
       phone: seed.phone,
       cancerType: seed.cancerType,
       chemoCycle: seed.chemoCycle,
+      treatmentFrequency: seed.treatmentFrequency,
       parish: seed.parish,
     },
   });

@@ -32,6 +32,7 @@ async function main() {
         phone: p.phone,
         cancerType: p.cancerType,
         chemoCycle: p.chemoCycle,
+        treatmentFrequency: p.treatmentFrequency,
         parish: p.parish,
         preferredLanguage: p.preferredLanguage ?? "en",
       },
