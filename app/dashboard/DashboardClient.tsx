@@ -8,6 +8,7 @@ import { PatientRiskTable, type QueuePatient } from "@/components/PatientRiskTab
 import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendChart";
 import { RiskBadge } from "@/components/RiskBadge";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
+import { DemoControls } from "@/components/DemoControls";
 
 export interface CaregiverLogView {
   id: string;
@@ -42,7 +43,13 @@ export interface DashboardPatient extends QueuePatient {
 
 const RISK_ORDER = { RED: 0, YELLOW: 1, GREEN: 2 } as const;
 
-export function DashboardClient({ patients }: { patients: DashboardPatient[] }) {
+export function DashboardClient({
+  patients,
+  demoModeEnabled,
+}: {
+  patients: DashboardPatient[];
+  demoModeEnabled: boolean;
+}) {
   const sortedQueue = useMemo(
     () =>
       [...patients].sort((a, b) => {
@@ -72,6 +79,8 @@ export function DashboardClient({ patients }: { patients: DashboardPatient[] }) 
           SMS-first symptom monitoring for rural Louisiana cancer care — Terrebonne &amp; Lafourche Parish
         </p>
       </header>
+
+      {demoModeEnabled && <DemoControls />}
 
       {burdenPatients.length > 0 && (
         <Card className="border-[var(--viz-caregiver-burden)]/35 bg-[var(--viz-caregiver-burden)]/5">

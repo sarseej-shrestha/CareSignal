@@ -35,6 +35,19 @@ Glanceable talking points — read right before going on, not during. Full ratio
 **"How do you know this works?"**
 > It's built on a validated intervention pattern from published research, calibrated to match those studies' real-world escalation base rates, and we've scoped an explicit pilot-validation path against retrospective Ochsner data before any real deployment — we're not claiming clinical validation today, we're claiming a defensible, honest starting point.
 
-## Demo fallback mode
+## Demo fallback mode (break glass only)
 
-See "Fallback / demo-resilience mode" below once built (Task 2) — a `DEMO_MODE` local trigger replays the same seeded scenarios without depending on live Twilio/Groq, for use only if a live SMS round-trip fails mid-pitch. Live SMS remains the primary demo path.
+Live SMS through Twilio + Groq is the primary demo path — use it. This is only for if venue wifi dies, the Twilio trial account hits a limit, or Groq is slow/down mid-pitch. It reproduces the exact same dashboard end state a live SMS would have produced (same risk engine, same alert pathway) with zero external dependency.
+
+**Where:** a "Demo fallback (DEMO_MODE)" panel sits right below the header on `/dashboard`, with one button per scenario — but only if `.env` has `DEMO_MODE="true"` (it does by default for the hackathon build). Click a button, it triggers in ~1 second, dashboard updates automatically.
+
+**If the dashboard panel isn't visible or the browser is having its own issues**, run it from a terminal instead:
+```
+cd ~/CareSignal
+npx tsx scripts/demo-trigger.ts naquin-fever        # fever escalation → RED
+npx tsx scripts/demo-trigger.ts guidry-divergence   # rules=YELLOW, model=RED
+npx tsx scripts/demo-trigger.ts trahan-burden       # caregiver burden flag
+```
+Then just refresh the dashboard tab.
+
+**Safe to re-trigger** — each one resets its patient first, so clicking twice doesn't double up or break anything. Good to run once before you go on, just to confirm it's warm.
