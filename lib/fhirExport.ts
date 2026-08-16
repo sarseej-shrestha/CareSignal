@@ -40,6 +40,7 @@
 
 import { randomUUID } from "node:crypto";
 import { prisma } from "./db";
+import { normalizeLang } from "./i18n";
 
 const LOCAL_SYSTEM = "http://caresignal.example/local-codes";
 
@@ -106,7 +107,13 @@ export async function buildFhirBundle(patientId: string) {
     identifier: [{ system: "http://caresignal.example/mrn", value: patient.mrn }],
     name: [{ text: `${patient.firstName} ${patient.lastName}`, family: patient.lastName, given: [patient.firstName] }],
     telecom: [{ system: "phone", value: patient.phone }],
-    communication: [{ language: { coding: [{ system: "urn:ietf:bcp:47", code: patient.preferredLanguage }] } }],
+    // Routed through normalizeLang() rather than the raw column — the field
+    // is an unconstrained String at the schema level (not a DB enum), and
+    // this is the only consumer of it that wasn't already going through the
+    // same safe allowlist the SMS webhook uses (app/api/twilio/inbound).
+    // Without this, an invalid value would get embedded as-is into a field
+    // FHIR requires to actually be a valid BCP-47 language code.
+    communication: [{ language: { coding: [{ system: "urn:ietf:bcp:47", code: normalizeLang(patient.preferredLanguage) }] } }],
     address: [{ district: `${patient.parish} Parish`, state: "LA", country: "US" }],
   };
 
