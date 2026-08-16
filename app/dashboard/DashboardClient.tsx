@@ -9,6 +9,7 @@ import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendCha
 import { RiskBadge } from "@/components/RiskBadge";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
+import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
 import { sortByRiskPriority } from "@/lib/sortPatients";
 
 export interface CaregiverLogView {
@@ -40,6 +41,9 @@ export interface DashboardPatient extends QueuePatient {
     logs: CaregiverLogView[];
   } | null;
   caregiverBurdenReasons: string[] | null;
+  /** Separate model, separate time horizon (7-day forecast, not today's status) — never merged into riskStatus/riskScore. */
+  hospitalizationRiskScore: number;
+  hospitalizationRiskFactors: string[];
 }
 
 export function DashboardClient({
@@ -148,6 +152,11 @@ export function DashboardClient({
                 </ul>
               </div>
             )}
+
+            <HospitalizationRiskPanel
+              score={selected.hospitalizationRiskScore}
+              factors={selected.hospitalizationRiskFactors}
+            />
 
             <SymptomTrendChart data={selected.logs} />
 

@@ -19,8 +19,9 @@ model Patient {
   cancerType  String
   chemoCycle  String
   parish      String // e.g. "Terrebonne", "Lafourche"
-  riskStatus  String       @default("GREEN") // GREEN, YELLOW, RED
-  riskScore   Float        @default(0) // model probability 0-1
+  riskStatus  String       @default("GREEN") // GREEN, YELLOW, RED — TODAY's symptom risk
+  riskScore   Float        @default(0) // daily risk model probability 0-1
+  hospitalizationRiskScore Float @default(0) // separate model: probability of hospitalization within the next 7 days — a different time horizon and claim from riskStatus/riskScore, never merged into it
   caregiver   Caregiver?
   symptomLogs SymptomLog[]
   alerts      RiskAlert[]
