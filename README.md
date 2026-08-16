@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CareSignal
 
-## Getting Started
+SMS-first remote symptom monitoring for cancer patients undergoing chemotherapy, with a parallel caregiver-reporting channel. Daily check-ins (structured or freeform text) feed a two-layer risk engine — interpretable clinical rules plus a trained classifier — that flags escalating symptoms to a nurse triage dashboard. Caregiver burden is tracked as its own first-class signal, separate from patient clinical risk, not folded into it.
 
-First, run the development server:
+Built for the Ochsner Health / ASCO healthcare hackathon, grounded in Terrebonne and Lafourche Parish, Louisiana.
+
+## Tech stack
+
+- **Framework:** Next.js 16 (App Router, TypeScript, Tailwind v4, shadcn/ui)
+- **Database:** SQLite via Prisma ORM
+- **SMS:** Twilio SMS API + webhooks
+- **AI:** Groq (`openai/gpt-oss-120b`, OpenAI-compatible API) for freeform SMS parsing
+- **ML:** A hand-trained logistic regression (no external ML library) for the risk classifier, trained on simulated data — see `docs/model-calibration.md`
+- **Charts:** Recharts
+
+## Running locally
 
 ```bash
+npm install
+npx prisma db push
+npx tsx prisma/seed.ts
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:3000/dashboard](http://localhost:3000/dashboard).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Required environment variables (see `.env.example`):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `DATABASE_URL` — SQLite file path, defaults to `file:./dev.db`
+- `GROQ_API_KEY` — required for freeform SMS/text parsing
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` — required only for live inbound SMS via `/api/twilio/inbound`
+- `DEMO_MODE` — set to `"true"` to enable a local fallback that replays the seeded demo scenarios without needing a live Twilio/Groq round-trip (see `docs/pitch-notes.md`)
 
-## Learn More
+## Docs
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [`docs/pitch-notes.md`](docs/pitch-notes.md) — talking points and demo-day logistics
+- [`docs/model-calibration.md`](docs/model-calibration.md) — training data, metrics, and validation plan for the risk classifier
