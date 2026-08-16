@@ -13,7 +13,7 @@ import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel"
 import { SdohActionCard } from "@/components/SdohActionCard";
 import { SoapNoteGenerator } from "@/components/SoapNoteGenerator";
 import { FhirExportButton } from "@/components/FhirExportButton";
-import { sortByRiskPriority } from "@/lib/sortPatients";
+import { sortByConsolidatedPriority } from "@/lib/alertConsolidation";
 
 export interface CaregiverLogView {
   id: string;
@@ -44,8 +44,9 @@ export interface DashboardPatient extends QueuePatient {
     logs: CaregiverLogView[];
   } | null;
   caregiverBurdenReasons: string[] | null;
-  /** Separate model, separate time horizon (7-day forecast, not today's status) — never merged into riskStatus/riskScore. */
-  hospitalizationRiskScore: number;
+  // hospitalizationRiskScore is inherited from QueuePatient — separate
+  // model, separate time horizon (7-day forecast, not today's status),
+  // never merged into riskStatus/riskScore.
   hospitalizationRiskFactors: string[];
 }
 
@@ -56,7 +57,7 @@ export function DashboardClient({
   patients: DashboardPatient[];
   demoModeEnabled: boolean;
 }) {
-  const sortedQueue = useMemo(() => sortByRiskPriority(patients), [patients]);
+  const sortedQueue = useMemo(() => sortByConsolidatedPriority(patients), [patients]);
 
   const burdenPatients = useMemo(() => patients.filter((p) => p.caregiverBurdenReasons), [patients]);
 
@@ -118,9 +119,11 @@ export function DashboardClient({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Patient clinical risk queue</CardTitle>
+          <CardTitle className="text-base">Consolidated triage queue</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Sorted by risk level, then model probability. Click a row to see the full trend.
+            Daily clinical risk and 7-day hospitalization risk shown as ONE notification per patient — a
+            &quot;+ 7-day risk&quot; tag means both signals are elevated at once, not two separate items to review.
+            Click a row to see the full trend.
           </p>
         </CardHeader>
         <CardContent className="p-0">
