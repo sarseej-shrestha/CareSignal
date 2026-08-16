@@ -47,7 +47,7 @@ The load test writes real numbers to `docs/load-test-results.md` and needs `npm 
 - **Consolidated triage queue** — daily clinical risk and 7-day hospitalization risk merged into one prioritized notification per patient, not two separate items (see `docs/alert-volume-analysis.md`), with source labeling (Patient SMS vs. Caregiver SMS vs. AI-parsed freeform).
 - **Caregiver-burden alerts** — surfaced first, as their own alert type, never merged into clinical risk.
 - **7-day hospitalization-risk forecast** — a separate model and panel from the daily risk badge, with its contributing factors listed.
-- **AI-generated SOAP notes** — synthesizes recent check-ins into a Subjective/Objective/Assessment/Plan note, copyable for EHR use.
+- **AI-generated SOAP notes** — synthesizes recent check-ins into a Subjective/Objective/Assessment/Plan note. Every note starts as an unreviewed draft (a real database status, not just a UI label) with a computed confidence signal, and requires an explicit review action before it stops showing the draft banner; the draft/reviewed status travels with the text on copy.
 - **SDOH transportation card** — a triggered, parish-aware suggestion (not a booking flow), shown when risk is elevated.
 - **FHIR-lite export** — downloads a patient's data as a simplified, FHIR R4-shaped bundle (real, verified LOINC codes where available); a demonstration of interoperability thinking, not a certified integration — see the scope note in `lib/fhirExport.ts`.
 - **DEMO_MODE fallback panel** — replays the headline seeded scenarios locally if live SMS/AI isn't available mid-demo.

@@ -1,25 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, FileText, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, FileText, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatSoapNoteForExport } from "@/lib/soapNoteFormat";
 
 interface SoapNote {
+  id: string;
   subjective: string;
   objective: string;
   assessment: string;
   plan: string;
   fullText: string;
+  confidenceLevel: "HIGH" | "LIMITED";
+  confidenceReasons: string[];
+  status: "DRAFT" | "REVIEWED";
+  reviewedAt: string | null;
 }
 
-// Documentation aid, not an action button — generates a SOAP note a nurse
-// can review and copy/adapt into the EHR. Nothing here writes clinical
-// orders; the Plan section is generated as suggestions (see lib/ai.ts's
-// SOAP_NOTE_SYSTEM_PROMPT), and generating a note has no side effect beyond
-// optionally caching it on the patient's open alert (app/api/ai/soap-note).
+// A generated note is ALWAYS "DRAFT" until a clinician explicitly reviews
+// it (app/api/ai/soap-note/[id]/review) — that's enforced server-side
+// (prisma/schema.prisma's SoapNote model), not just by this component
+// defaulting to showing a banner. The copy button always runs the note
+// through formatSoapNoteForExport(), so the draft/reviewed status rides
+// along into whatever gets pasted elsewhere, not just what's shown here.
 export function SoapNoteGenerator({ patientId }: { patientId: string }) {
   const [note, setNote] = useState<SoapNote | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -43,9 +51,25 @@ export function SoapNoteGenerator({ patientId }: { patientId: string }) {
     }
   }
 
+  async function handleReview() {
+    if (!note) return;
+    setReviewing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ai/soap-note/${note.id}/review`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to mark as reviewed.");
+      setNote(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark as reviewed.");
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   async function handleCopy() {
     if (!note) return;
-    await navigator.clipboard.writeText(note.fullText);
+    await navigator.clipboard.writeText(formatSoapNoteForExport(note));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -74,29 +98,68 @@ export function SoapNoteGenerator({ patientId }: { patientId: string }) {
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       {note && (
-        <dl className="grid gap-2 text-sm">
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">S — Subjective</dt>
-            <dd>{note.subjective}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">O — Objective</dt>
-            <dd>{note.objective}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">A — Assessment</dt>
-            <dd>{note.assessment}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">P — Plan</dt>
-            <dd>{note.plan}</dd>
-          </div>
-        </dl>
+        <>
+          {note.status === "DRAFT" ? (
+            <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  AI-GENERATED DRAFT — REQUIRES CLINICIAN REVIEW
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Not a finalized clinical note. Review the content below, then mark it reviewed.
+                </p>
+              </div>
+              <Button size="sm" onClick={handleReview} disabled={reviewing} className="shrink-0">
+                {reviewing && <Loader2 className="size-3.5 animate-spin" />}
+                Mark reviewed
+              </Button>
+            </div>
+          ) : (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-2.5">
+              <ShieldCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                Reviewed{note.reviewedAt ? ` ${new Date(note.reviewedAt).toLocaleString()}` : ""}
+              </p>
+            </div>
+          )}
+
+          {note.confidenceLevel === "LIMITED" && (
+            <div className="mb-3 rounded-md border border-dashed p-2.5">
+              <p className="text-xs font-medium text-muted-foreground">Limited-confidence signal</p>
+              <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                {note.confidenceReasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <dl className="grid gap-2 text-sm">
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">S — Subjective</dt>
+              <dd>{note.subjective}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">O — Objective</dt>
+              <dd>{note.objective}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">A — Assessment</dt>
+              <dd>{note.assessment}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">P — Plan</dt>
+              <dd>{note.plan}</dd>
+            </div>
+          </dl>
+        </>
       )}
 
       {!note && !error && (
         <p className="text-xs text-muted-foreground">
-          Synthesizes recent check-ins and active alert reasons into a formatted note for EHR copy-paste.
+          Synthesizes recent check-ins and active alert reasons into a formatted note for EHR copy-paste. Every
+          generated note starts as an unreviewed draft.
         </p>
       )}
     </div>
