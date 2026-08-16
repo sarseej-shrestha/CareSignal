@@ -76,12 +76,13 @@ describe("buildFhirBundle", () => {
 
     // 1 for the open clinical alert + 1 for the hospitalization forecast (always present, separate model).
     expect(riskAssessments).toHaveLength(2);
-    const dailyRisk = riskAssessments.find((r) => r.id.startsWith("riskassessment-") && !r.id.includes("hospitalization"));
+    const dailyRisk = riskAssessments.find((r) => r.id.startsWith("riskassessment-"));
     expect(dailyRisk.prediction[0].rationale).toBe("Fever 101°F");
     expect(dailyRisk.prediction[0].probabilityDecimal).toBe(0.9);
 
-    const hospRisk = riskAssessments.find((r) => r.id.includes("hospitalization"));
+    const hospRisk = riskAssessments.find((r) => r.id.startsWith("hosp-risk-"));
     expect(hospRisk.prediction[0].outcome.text).toBe("Hospitalization within 7 days");
+    expect(hospRisk.id.length).toBeLessThanOrEqual(64); // FHIR resource id limit — this one was 68 chars before the fix
   });
 
   it("includes a Flag resource only when a CAREGIVER_BURDEN alert exists", async () => {
@@ -99,5 +100,31 @@ describe("buildFhirBundle", () => {
     const flag = withBurden!.entry.map((e) => e.resource).find((r: any) => r.resourceType === "Flag") as any;
     expect(flag).toBeDefined();
     expect(flag.code.text).toContain("Coping score 1/5");
+  });
+
+  // These two lock in the specific defects the real HAPI FHIR validator
+  // found (see docs/fhir-validation-results.md) so they can't silently
+  // regress.
+  it("gives every entry a fullUrl, and every cross-reference resolves to a fullUrl actually present in the bundle", async () => {
+    const patient = await seedTestPatient();
+    await prisma.symptomLog.create({
+      data: { patientId: patient.id, pain: 3, nausea: 3, fatigue: 3, fever: 98.5, source: "PATIENT_SMS" },
+    });
+
+    const bundle = await buildFhirBundle(patient.id);
+    const fullUrls = new Set(bundle!.entry.map((e: any) => e.fullUrl));
+
+    for (const entry of bundle!.entry as any[]) {
+      expect(entry.fullUrl).toBeTruthy();
+      const subjectRef = entry.resource.subject?.reference;
+      if (subjectRef) expect(fullUrls.has(subjectRef)).toBe(true);
+    }
+  });
+
+  it("never includes a Bundle.total — invalid per FHIR's bdl-1 constraint for a 'collection' type bundle", async () => {
+    const patient = await seedTestPatient();
+    const bundle = await buildFhirBundle(patient.id);
+    expect(bundle!.type).toBe("collection");
+    expect(bundle).not.toHaveProperty("total");
   });
 });
