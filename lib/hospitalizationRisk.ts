@@ -15,6 +15,13 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 export interface HospitalizationRiskResult {
   score: number;
   inputs: HospitalizationInputs;
+  // False when there's zero symptom-log history in the trailing 7-day
+  // window — the model still returns a real number in that case (its
+  // learned intercept, not a placeholder), but that number is a population
+  // baseline, not a personalized estimate, and looks exactly as precise as
+  // any other patient's score unless the UI is told to caveat it. See
+  // components/HospitalizationRiskPanel.tsx.
+  hasRecentHistory: boolean;
 }
 
 export async function computeHospitalizationRisk(patientId: string): Promise<HospitalizationRiskResult> {
@@ -67,5 +74,5 @@ export async function computeHospitalizationRisk(patientId: string): Promise<Hos
     caregiverBurdenFlag7d: burdenAlertCount7d > 0 ? 1 : 0,
   };
 
-  return { score: predictHospitalizationRisk(inputs), inputs };
+  return { score: predictHospitalizationRisk(inputs), inputs, hasRecentHistory: windowLogs.length > 0 };
 }

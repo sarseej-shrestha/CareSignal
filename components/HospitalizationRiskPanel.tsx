@@ -5,7 +5,15 @@ import { TrendingUp } from "lucide-react";
 // different claim (a probability, not a status bucket). Rendered as a
 // magnitude (sequential blue ramp), not a status color, so it can't be
 // visually confused with the daily clinical risk badge.
-export function HospitalizationRiskPanel({ score, factors }: { score: number; factors: string[] }) {
+export function HospitalizationRiskPanel({
+  score,
+  factors,
+  hasRecentHistory,
+}: {
+  score: number;
+  factors: string[];
+  hasRecentHistory: boolean;
+}) {
   const pct = Math.round(score * 100);
 
   return (
@@ -27,6 +35,18 @@ export function HospitalizationRiskPanel({ score, factors }: { score: number; fa
         Separate from today&apos;s clinical risk above — a rolling estimate of hospitalization within the next 7
         days, not a same-day symptom flag.
       </p>
+      {!hasRecentHistory && (
+        // Computed from real data (zero symptom logs in the trailing 7-day
+        // window), not the model self-assessing — same pattern as the SOAP
+        // note's LIMITED confidence signal. Without this, a brand-new
+        // patient shows a bare, precise-looking percentage (the model's
+        // learned intercept for an all-zero feature vector) with no visual
+        // distinction from a personalized estimate built on real history.
+        <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-500">
+          Limited data — no check-ins in the past 7 days. This is the model&apos;s baseline for no recent history, not
+          a personalized estimate yet.
+        </p>
+      )}
       {factors.length > 0 && (
         <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
           {factors.map((f) => (
