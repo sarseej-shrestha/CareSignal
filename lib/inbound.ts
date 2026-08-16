@@ -103,36 +103,46 @@ export async function recordCaregiverLog(params: {
     },
   });
 
-  if (params.copingScore > 2) {
-    return { burdenFlagged: false };
+  let burdenFlagged = false;
+
+  if (params.copingScore <= 2) {
+    const recentLogs = await prisma.caregiverLog.findMany({
+      where: { caregiverId: params.caregiverId },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    });
+    const lowCount = recentLogs.filter((l) => l.copingScore <= 2).length;
+
+    await prisma.riskAlert.create({
+      data: {
+        patientId: params.patientId,
+        level: "CAREGIVER_BURDEN",
+        reasons: JSON.stringify([
+          `Caregiver coping score ${params.copingScore}/5 ("overwhelmed") — ${lowCount} of last ${recentLogs.length} check-ins at or below threshold`,
+          "Caregiver check-in flags exhaustion and burnout risk",
+        ]),
+        modelProb: null,
+        status: "OPEN",
+      },
+    });
+
+    burdenFlagged = true;
   }
 
-  const recentLogs = await prisma.caregiverLog.findMany({
-    where: { caregiverId: params.caregiverId },
-    orderBy: { createdAt: "desc" },
-    take: 3,
-  });
-  const lowCount = recentLogs.filter((l) => l.copingScore <= 2).length;
-
-  await prisma.riskAlert.create({
-    data: {
-      patientId: params.patientId,
-      level: "CAREGIVER_BURDEN",
-      reasons: JSON.stringify([
-        `Caregiver coping score ${params.copingScore}/5 ("overwhelmed") — ${lowCount} of last ${recentLogs.length} check-ins at or below threshold`,
-        "Caregiver check-in flags exhaustion and burnout risk",
-      ]),
-      modelProb: null,
-      status: "OPEN",
-    },
-  });
-
-  // A new CAREGIVER_BURDEN alert changes the hospitalization model's
-  // caregiverBurdenFlag7d feature — recompute so the dashboard reflects it.
+  // Every caregiver check-in changes the hospitalization model's rolling
+  // 7-day caregiverBurdenFlag7d feature — a coping score IMPROVING can drop
+  // that flag out of the 7-day window just as much as a bad score can add
+  // it in, so this recompute must run on every check-in, not just the
+  // burden-flagged branch above. It used to sit inside that branch (an
+  // early return skipped it entirely on a good coping score), which meant
+  // the displayed hospitalizationRiskScore only ever moved on bad news and
+  // silently never reflected recovery — see
+  // tests/integration/hospitalizationRecompute.test.ts for the regression
+  // test that pins this down.
   const hosp = await computeHospitalizationRisk(params.patientId);
   await prisma.patient.update({ where: { id: params.patientId }, data: { hospitalizationRiskScore: hosp.score } });
 
-  return { burdenFlagged: true };
+  return { burdenFlagged };
 }
 
 export type Sender =
