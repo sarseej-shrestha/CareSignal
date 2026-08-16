@@ -16,6 +16,7 @@ interface PatientOverrides {
   cancerType?: string;
   chemoCycle?: string;
   parish?: string;
+  preferredLanguage?: string;
 }
 
 export async function seedTestPatient(overrides: PatientOverrides = {}) {

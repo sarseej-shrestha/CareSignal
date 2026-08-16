@@ -53,6 +53,26 @@ describe("POST /api/twilio/inbound", () => {
     expect(updated.hospitalizationRiskScore).toBeGreaterThan(0);
   });
 
+  it("replies in French for a patient with preferredLanguage 'fr'", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551099", preferredLanguage: "fr" });
+    const res = await POST(formRequest({ From: "+19995551099", To: "+1900", Body: "1,1,2,98.4" }));
+
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("Merci");
+    expect(xml).not.toContain("Thanks");
+
+    const logs = await prisma.symptomLog.findMany({ where: { patientId: patient.id } });
+    expect(logs).toHaveLength(1); // language only affects the reply text, not what's recorded
+  });
+
+  it("replies in English by default when preferredLanguage is unset", async () => {
+    await seedTestPatient({ phone: "+19995551098" });
+    const res = await POST(formRequest({ From: "+19995551098", To: "+1900", Body: "1,1,2,98.4" }));
+    const xml = await res.text();
+    expect(xml).toContain("Thanks");
+  });
+
   it("records a freeform patient symptom report via the mocked AI parser", async () => {
     const patient = await seedTestPatient({ phone: "+19995551002" });
     vi.mocked(parsePatientSymptomText).mockResolvedValueOnce({
