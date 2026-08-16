@@ -44,7 +44,7 @@ The load test writes real numbers to `docs/load-test-results.md` and needs `npm 
 
 ## What's in the dashboard
 
-- **Nurse triage queue** — prioritized by risk (RED > YELLOW > GREEN, then model probability), with source labeling (Patient SMS vs. Caregiver SMS vs. AI-parsed freeform).
+- **Consolidated triage queue** — daily clinical risk and 7-day hospitalization risk merged into one prioritized notification per patient, not two separate items (see `docs/alert-volume-analysis.md`), with source labeling (Patient SMS vs. Caregiver SMS vs. AI-parsed freeform).
 - **Caregiver-burden alerts** — surfaced first, as their own alert type, never merged into clinical risk.
 - **7-day hospitalization-risk forecast** — a separate model and panel from the daily risk badge, with its contributing factors listed.
 - **AI-generated SOAP notes** — synthesizes recent check-ins into a Subjective/Objective/Assessment/Plan note, copyable for EHR use.
@@ -57,3 +57,4 @@ The load test writes real numbers to `docs/load-test-results.md` and needs `npm 
 - [`docs/pitch-notes.md`](docs/pitch-notes.md) — talking points and demo-day logistics
 - [`docs/model-calibration.md`](docs/model-calibration.md) — training data, metrics, and validation plan for both risk models
 - [`docs/load-test-results.md`](docs/load-test-results.md) — concurrency/load test results, including a real concurrency bug found and fixed
+- [`docs/alert-volume-analysis.md`](docs/alert-volume-analysis.md) — computed nurse-triage notification volume estimates for a 50-100 patient panel
