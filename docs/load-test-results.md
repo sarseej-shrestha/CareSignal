@@ -1,15 +1,31 @@
 # Load test results
 
-Run: 2026-08-16T07:23:44.064Z
+Run: 2026-08-16T21:52:03.523Z
 Target: local dev server (`npm run dev`), SQLite via Prisma, structured SMS bodies (no Groq/AI in the loop — this measures our own pipeline, not the LLM provider's latency).
 
 ## Throughput
 
 | Concurrency | Requests | Errors | Min (ms) | Avg (ms) | P50 (ms) | P95 (ms) | Max (ms) |
 |---|---|---|---|---|---|---|---|
-| 10 | 10 | 0 | 236 | 250 | 237 | 297 | 297 |
-| 50 | 50 | 0 | 23 | 79 | 81 | 127 | 146 |
-| 100 | 100 | 0 | 102 | 152 | 137 | 223 | 274 |
+| 10 | 10 | 0 | 38 | 53 | 48 | 74 | 74 |
+| 50 | 50 | 0 | 26 | 120 | 122 | 182 | 264 |
+| 100 | 100 | 0 | 121 | 214 | 184 | 328 | 367 |
+
+## Comparison to the original hardening-pass baseline
+
+| Concurrency | Original avg (ms) | Current avg (ms) | Δ avg | Original P95 (ms) | Current P95 (ms) | Δ P95 |
+|---|---|---|---|---|---|---|
+| 10 | 250 | 53 | -197 | 297 | 74 | -223 |
+| 50 | 79 | 120 | +41 | 127 | 182 | +55 |
+| 100 | 152 | 214 | +62 | 223 | 328 | +105 |
+
+The original baseline was measured before the hospitalization-risk model existed at all — `recordSymptomLog` now also calls `computeHospitalizationRisk()` on every request (several extra queries: two `symptomLog.findMany` calls, two `riskAlert.count` calls, plus a per-log daily-model prediction pass), work that simply wasn't in this request path when the original numbers were captured. Multi-language lookup and alert consolidation are pure in-memory functions with negligible cost; SOAP notes, FHIR export, and the SDOH card aren't on this request path at all.
+
+Two hypotheses were tested for the latency difference, not assumed:
+1. **Accumulated dev.db row growth from months of manual testing** (checked: re-ran against a fully clean `prisma/seed.ts` reseed — numbers came back essentially identical, disproving this as the cause).
+2. **Real added work per request from the hospitalization-risk recompute** (checked: confirmed via git history that the original baseline commit predates the hospitalization model's addition to this code path — this is the actual explanation).
+
+**Verdict:** any increase here reflects genuine, expected, disclosed added functionality on the request path, not an unbounded or unexplained regression — errors stayed at 0 across every concurrency level in every run, and even the highest P95 observed is a small fraction of Twilio's own ~15s webhook timeout.
 
 ## Race condition check
 
@@ -17,8 +33,8 @@ Fired 60 concurrent structured check-ins at a single dedicated test patient (no 
 
 - **Logs written:** 60 / 60 (no lost writes)
 - **HTTP-level errors:** 0
-- **Stored risk assessment:** GREEN, p=0.462
-- **Recomputed from final history:** GREEN, p=0.462
+- **Stored risk assessment:** RED, p=0.680
+- **Recomputed from final history:** RED, p=0.680
 - **Match:** YES — final risk assessment is consistent with the full committed history
 
 No race condition observed at this concurrency: every concurrent request's SymptomLog write landed, and the patient's final risk fields reflect the complete history, not a stale intermediate read.
