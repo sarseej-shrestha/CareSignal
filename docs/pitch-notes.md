@@ -35,6 +35,22 @@ Glanceable talking points — read right before going on, not during. Full ratio
 **"How do you know this works?"**
 > It's built on a validated intervention pattern from published research, calibrated to match those studies' real-world escalation base rates, and we've scoped an explicit pilot-validation path against retrospective Ochsner data before any real deployment — we're not claiming clinical validation today, we're claiming a defensible, honest starting point.
 
+## Live demo (Twilio) — setup steps, requires action outside this repo
+
+Live inbound SMS is the primary demo path, but it needs a real Twilio account — this can't be set up from inside the codebase, since it requires signing up and verifying a phone number through Twilio's own console. Steps:
+
+1. **Create a Twilio account** at twilio.com (a free trial account works — it comes with trial credit and one auto-assigned Twilio phone number).
+2. **Verify the phone number(s) you'll text FROM during the demo** as caller IDs: Twilio Console → Phone Numbers → Manage → Verified Caller IDs → add your (or a demo phone's) real number, then confirm via the code Twilio texts/calls to it. **A trial account can only exchange SMS with verified numbers** — texting from an unverified phone gets silently ignored by Twilio, not an error CareSignal would ever see.
+3. **Point the Twilio number's webhook at this app**: Twilio Console → Phone Numbers → your number → Messaging → "A message comes in" → set to `https://<your-deployed-or-tunneled-url>/api/twilio/inbound`, HTTP POST. Running locally, this needs a public tunnel (e.g. `ngrok http 3000`) since Twilio can't reach `localhost`.
+4. **Set the three Twilio env vars** in `.env`: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (both from the Twilio Console dashboard), `TWILIO_PHONE_NUMBER` (the number from step 1, E.164 format). Leaving `TWILIO_AUTH_TOKEN` unset makes the webhook skip signature validation (fine for local dev, not for anything public-facing — see the comment in `app/api/twilio/inbound/route.ts`).
+5. **Swap a seeded patient's fake phone number for your real verified one** — the seeded numbers (`+19855550142` etc.) are fake and Twilio will never see traffic to/from them. Run:
+   ```
+   npx tsx scripts/set-live-demo-number.ts <mrn> <yourVerifiedPhoneE164> [caregiverPhoneE164]
+   ```
+   e.g. `npx tsx scripts/set-live-demo-number.ts OCH-70143 +19855551234` — see the script for the full patient MRN list. Text `pain,nausea,fatigue,fever` (e.g. `3,2,4,99.1`) or a freeform sentence to the Twilio number from that verified phone to confirm the round trip.
+
+**Verified phone numbers actually used for the live demo should be recorded here once step 5 is done, so the pitch team knows which number(s) to text from** — replace this line with the real MRN → verified-phone mapping once set up (do not commit real personal phone numbers to a public repo; use this line as a private note or a placeholder like "ask [team member] for the demo phone").
+
 ## Demo fallback mode (break glass only)
 
 Live SMS through Twilio + Groq is the primary demo path — use it. This is only for if venue wifi dies, the Twilio trial account hits a limit, or Groq is slow/down mid-pitch. It reproduces the exact same dashboard end state a live SMS would have produced (same risk engine, same alert pathway) with zero external dependency.
