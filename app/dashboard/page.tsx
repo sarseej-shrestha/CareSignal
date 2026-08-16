@@ -50,6 +50,7 @@ export default async function DashboardPage() {
       parish: p.parish,
       cancerType: p.cancerType,
       chemoCycle: p.chemoCycle,
+      treatmentFrequency: p.treatmentFrequency as "weekly" | "every_2_weeks" | "every_3_weeks" | "monthly",
       riskStatus: p.riskStatus as "GREEN" | "YELLOW" | "RED",
       riskScore: p.riskScore,
       hasCaregiverBurden: !!burdenAlert,

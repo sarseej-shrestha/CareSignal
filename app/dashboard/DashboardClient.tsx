@@ -11,6 +11,7 @@ import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
 import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
 import { SdohActionCard } from "@/components/SdohActionCard";
+import type { TreatmentFrequency } from "@/lib/transportationResources";
 import { SoapNoteGenerator } from "@/components/SoapNoteGenerator";
 import { FhirExportButton } from "@/components/FhirExportButton";
 import { sortByConsolidatedPriority } from "@/lib/alertConsolidation";
@@ -24,6 +25,7 @@ export interface CaregiverLogView {
 }
 
 export interface DashboardPatient extends QueuePatient {
+  treatmentFrequency: TreatmentFrequency;
   reasons: string[];
   logs: TrendPoint[];
   rawLogs: {
@@ -164,9 +166,13 @@ export function DashboardClient({
               factors={selected.hospitalizationRiskFactors}
             />
 
-            {(selected.riskStatus !== "GREEN" || selected.hospitalizationRiskScore >= 0.3) && (
-              <SdohActionCard parish={selected.parish} />
-            )}
+            {/* No risk-level gate here on purpose — transportation burden comes
+                from how OFTEN a patient has to travel for treatment, not from
+                their current symptom severity, so a stable GREEN patient on a
+                frequent regimen still gets the suggestion. The component
+                itself decides whether to render, based on treatment
+                frequency + parish — see lib/transportationResources.ts. */}
+            <SdohActionCard parish={selected.parish} treatmentFrequency={selected.treatmentFrequency} />
 
             <SoapNoteGenerator patientId={selected.id} />
 
