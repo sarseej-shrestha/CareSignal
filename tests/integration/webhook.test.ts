@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import twilio from "twilio";
 import { prisma } from "@/lib/db";
 import { resetDb, seedTestPatient, seedTestCaregiver } from "../helpers/db";
 
@@ -251,5 +252,56 @@ describe("POST /api/twilio/inbound", () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].parsedByAi).toBe(true); // proves it went through the AI path, not the structured one
     expect(logs[0].fever).toBeLessThan(110); // never the literal "999" from the raw text
+  });
+});
+
+// Every test above runs without TWILIO_AUTH_TOKEN set, which already
+// exercises the "skip validation, demo mode" path on every request (all of
+// them return 200 with no signature header at all). These tests cover the
+// enforcement path specifically — every test file in this suite runs
+// against the same process, so TWILIO_AUTH_TOKEN is explicitly unset in
+// afterEach to avoid leaking into any other file's tests.
+describe("POST /api/twilio/inbound — Twilio signature validation", () => {
+  const WEBHOOK_URL = "http://localhost:3000/api/twilio/inbound";
+  const FAKE_AUTH_TOKEN = "test-auth-token-not-real";
+
+  afterEach(() => {
+    delete process.env.TWILIO_AUTH_TOKEN;
+  });
+
+  function signedFormRequest(fields: Record<string, string>, signature: string): NextRequest {
+    const body = new URLSearchParams(fields).toString();
+    return new NextRequest(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", "x-twilio-signature": signature },
+      body,
+    });
+  }
+
+  it("rejects a request with a missing/invalid signature (403) when TWILIO_AUTH_TOKEN is set", async () => {
+    process.env.TWILIO_AUTH_TOKEN = FAKE_AUTH_TOKEN;
+    await seedTestPatient({ phone: "+19995551200" });
+
+    const res = await POST(signedFormRequest({ From: "+19995551200", To: "+1900", Body: "1,1,2,98.4" }, "not-a-real-signature"));
+    expect(res.status).toBe(403);
+
+    // Confirms rejection happens before any data is touched — an attacker
+    // spoofing a phone number in the body can't write a fake symptom log.
+    const logs = await prisma.symptomLog.findMany();
+    expect(logs).toHaveLength(0);
+  });
+
+  it("accepts a request with a correctly computed signature when TWILIO_AUTH_TOKEN is set", async () => {
+    process.env.TWILIO_AUTH_TOKEN = FAKE_AUTH_TOKEN;
+    await seedTestPatient({ phone: "+19995551201" });
+
+    const fields = { From: "+19995551201", To: "+1900", Body: "1,1,2,98.4" };
+    const signature = twilio.getExpectedTwilioSignature(FAKE_AUTH_TOKEN, WEBHOOK_URL, fields);
+
+    const res = await POST(signedFormRequest(fields, signature));
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.symptomLog.findMany();
+    expect(logs).toHaveLength(1);
   });
 });
