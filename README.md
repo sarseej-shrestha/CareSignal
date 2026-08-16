@@ -49,7 +49,7 @@ The load test writes real numbers to `docs/load-test-results.md` and needs `npm 
 - **7-day hospitalization-risk forecast** — a separate model and panel from the daily risk badge, with its contributing factors listed.
 - **AI-generated SOAP notes** — synthesizes recent check-ins into a Subjective/Objective/Assessment/Plan note. Every note starts as an unreviewed draft (a real database status, not just a UI label) with a computed confidence signal, and requires an explicit review action before it stops showing the draft banner; the draft/reviewed status travels with the text on copy.
 - **SDOH transportation card** — a triggered, parish-aware suggestion (not a booking flow), shown when risk is elevated.
-- **FHIR-lite export** — downloads a patient's data as a simplified, FHIR R4-shaped bundle (real, verified LOINC codes where available); a demonstration of interoperability thinking, not a certified integration — see the scope note in `lib/fhirExport.ts`.
+- **FHIR-lite export** — downloads a patient's data as a simplified FHIR R4 bundle (real, verified LOINC codes where available); validated against HL7's real reference validator across four rounds, now passing with zero errors (111 remaining warnings, all cosmetic best-practice recommendations) — genuinely FHIR-conformant, though not a certified EHR integration. See `docs/fhir-validation-results.md` for the full results and the scope note in `lib/fhirExport.ts`.
 - **DEMO_MODE fallback panel** — replays the headline seeded scenarios locally if live SMS/AI isn't available mid-demo.
 
 ## Docs
