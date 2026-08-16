@@ -50,6 +50,7 @@ export interface SeedPatient {
   cancerType: string;
   chemoCycle: string;
   parish: string;
+  preferredLanguage?: "en" | "fr";
   logs: SeedSymptomDay[];
   caregiver?: {
     firstName: string;
@@ -272,5 +273,35 @@ export const patients: SeedPatient[] = [
         { daysAgo: 0, patientStatus: 4, copingScore: 4 },
       ],
     },
+  },
+  {
+    // French-speaking patient — demonstrates preferredLanguage-driven
+    // outbound replies and freeform-French inbound parsing. Last entry is
+    // real freeform French text (not a translated placeholder) so the
+    // freeform-AI path can be demoed/verified against it directly.
+    mrn: "OCH-70148",
+    firstName: "Émile",
+    lastName: "Thibodeaux",
+    phone: "+19855550148",
+    cancerType: "Multiple myeloma",
+    chemoCycle: "Cycle 3 of 6",
+    parish: "Lafourche",
+    preferredLanguage: "fr",
+    logs: [
+      { daysAgo: 5, pain: 1, nausea: 1, fatigue: 2, fever: 98.3, rawSmsText: "1,1,2,98.3" },
+      { daysAgo: 4, pain: 1, nausea: 2, fatigue: 3, fever: 98.4, rawSmsText: "1,2,3,98.4" },
+      { daysAgo: 3, pain: 2, nausea: 2, fatigue: 3, fever: 98.3, rawSmsText: "2,2,3,98.3" },
+      { daysAgo: 2, pain: 2, nausea: 2, fatigue: 4, fever: 98.5, rawSmsText: "2,2,4,98.5" },
+      { daysAgo: 1, pain: 2, nausea: 3, fatigue: 4, fever: 98.4, rawSmsText: "2,3,4,98.4" },
+      {
+        daysAgo: 0,
+        pain: 1,
+        nausea: 3,
+        fatigue: 6,
+        fever: 98.6,
+        rawSmsText: "Je me sens assez fatigué aujourd'hui, un peu de nausée, mais pas de fièvre, heureusement.",
+        parsedByAi: true,
+      },
+    ],
   },
 ];

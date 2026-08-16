@@ -10,6 +10,7 @@ import {
   type Sender,
 } from "@/lib/inbound";
 import type { RiskAssessment } from "@/lib/risk";
+import { normalizeLang, t, type Lang } from "@/lib/i18n";
 
 function twiml(message: string): NextResponse {
   const response = new twilio.twiml.MessagingResponse();
@@ -20,24 +21,22 @@ function twiml(message: string): NextResponse {
   });
 }
 
-const GENERIC_FALLBACK_MESSAGE =
-  "Sorry, something went wrong logging that on our end — it wasn't saved. Please try texting again in a few minutes, or call your clinic if this is urgent.";
-
-function riskAckMessage(assessment: RiskAssessment): string {
-  if (assessment.level === "RED") {
-    return "Thanks for the update. Based on what you shared, a nurse from your care team will call you shortly. If you're feeling very unwell, please don't wait — call your clinic or 911.";
-  }
-  if (assessment.level === "YELLOW") {
-    return "Thanks for the update — logged. Your care team is keeping an eye on your recent symptoms.";
-  }
-  return "Thanks for checking in — logged. Feel better!";
+function riskAckMessage(assessment: RiskAssessment, lang: Lang): string {
+  if (assessment.level === "RED") return t("ackRed", lang);
+  if (assessment.level === "YELLOW") return t("ackYellow", lang);
+  return t("ackGreen", lang);
 }
 
-// Handles one already-identified sender's message. Split out from POST() so
-// the top-level handler can wrap it in one broad safety-net try/catch (see
-// below) without that catch swallowing the more specific, better-worded
-// error handling already inside here for the freeform-AI-parsing calls.
-async function handleMessage(sender: Sender, body: string): Promise<NextResponse> {
+function senderLang(sender: Sender): Lang {
+  return sender.type === "PATIENT" ? normalizeLang(sender.patient.preferredLanguage) : normalizeLang(sender.caregiver.preferredLanguage);
+}
+
+// Handles one already-identified sender's message, in their preferred
+// language. Split out from POST() so the top-level handler can wrap it in
+// one broad safety-net try/catch (see below) without that catch swallowing
+// the more specific, better-worded error handling already inside here for
+// the freeform-AI-parsing calls.
+async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<NextResponse> {
   if (sender.type === "PATIENT") {
     const structured = parseStructuredSymptoms(body);
     if (structured) {
@@ -48,7 +47,7 @@ async function handleMessage(sender: Sender, body: string): Promise<NextResponse
         rawSmsText: body,
         parsedByAi: false,
       });
-      return twiml(riskAckMessage(assessment));
+      return twiml(riskAckMessage(assessment, lang));
     }
 
     try {
@@ -63,7 +62,7 @@ async function handleMessage(sender: Sender, body: string): Promise<NextResponse
         rawSmsText: body,
         parsedByAi: true,
       });
-      return twiml(riskAckMessage(assessment));
+      return twiml(riskAckMessage(assessment, lang));
     } catch (err) {
       // Covers both a Groq error/timeout (network issue, rate limit, the
       // REQUEST_TIMEOUT_MS budget in lib/ai.ts running out) and a malformed
@@ -71,9 +70,7 @@ async function handleMessage(sender: Sender, body: string): Promise<NextResponse
       // reply instead of silence, and can immediately retry with the
       // structured format as a workaround.
       console.error("[twilio/inbound] patient freeform parse failed:", err);
-      return twiml(
-        "Sorry, we couldn't understand that message. Please reply with your pain, nausea, and fatigue (0-10) and your temperature, e.g. \"4,2,6,98.6\"."
-      );
+      return twiml(t("patientParseFailed", lang));
     }
   }
 
@@ -88,7 +85,7 @@ async function handleMessage(sender: Sender, body: string): Promise<NextResponse
       rawSmsText: body,
       parsedByAi: false,
     });
-    return twiml(`Thanks, logged on ${sender.patient.firstName}'s behalf. ${riskAckMessage(assessment)}`);
+    return twiml(t("caregiverRelayPrefix", lang, { name: sender.patient.firstName }) + riskAckMessage(assessment, lang));
   }
 
   const structuredCoping = parseStructuredCaregiverCheckin(body);
@@ -99,11 +96,7 @@ async function handleMessage(sender: Sender, body: string): Promise<NextResponse
       ...structuredCoping,
       rawSmsText: body,
     });
-    return twiml(
-      burdenFlagged
-        ? "Thank you for sharing — caregiving is hard. We've flagged this for your care team so they can check in on you too."
-        : "Thanks for checking in on how you're doing — logged."
-    );
+    return twiml(t(burdenFlagged ? "caregiverBurdenFlaggedStructured" : "caregiverCopingLoggedStructured", lang));
   }
 
   try {
@@ -140,19 +133,17 @@ async function handleMessage(sender: Sender, body: string): Promise<NextResponse
     // ~1-in-5 non-determinism case). Ask rather than guess wrong and log
     // fabricated data against either the patient or the caregiver.
     if (!parsed.patientSymptoms && !parsed.caregiverCoping) {
-      return twiml(
-        "Thanks for the message — we couldn't quite tell if that was about how the patient is doing or how you're doing. Could you say a bit more?"
-      );
+      return twiml(t("clarifyingQuestion", lang));
     }
 
     const parts: string[] = [];
-    if (assessment) parts.push(riskAckMessage(assessment));
-    if (burdenFlagged) parts.push("We've also flagged this for your care team to check in on you.");
-    if (parts.length === 0) parts.push("Thanks for checking in — logged.");
+    if (assessment) parts.push(riskAckMessage(assessment, lang));
+    if (burdenFlagged) parts.push(t("caregiverBurdenNote", lang));
+    if (parts.length === 0) parts.push(t("genericLogged", lang));
     return twiml(parts.join(" "));
   } catch (err) {
     console.error("[twilio/inbound] caregiver freeform parse failed:", err);
-    return twiml("Sorry, we couldn't understand that message. Please try again.");
+    return twiml(t("caregiverParseFailed", lang));
   }
 }
 
@@ -185,17 +176,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing From." }, { status: 400 });
   }
 
-  // An empty Body (e.g. a photo-only MMS, or a blank text) DOES have a real
-  // sender we can reply to — so unlike the missing-From case, this gets a
-  // friendly SMS reply rather than a raw JSON error, since the sender is a
-  // patient or caregiver who will actually see it.
-  if (!body) {
-    return twiml("We didn't get any text in that message — could you resend with how you're feeling, e.g. \"4,2,6,98.6\" or just describe it in your own words?");
-  }
-
   // Twilio request signature validation — skipped when TWILIO_AUTH_TOKEN isn't
   // configured (local/demo mode without a live Twilio account), but enforced
-  // whenever it is, since this endpoint writes clinical data.
+  // whenever it is, since this endpoint writes clinical data. Runs before
+  // anything else touches the request's content, including the sender
+  // lookup below.
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (authToken) {
     const signature = req.headers.get("x-twilio-signature") ?? "";
@@ -213,12 +198,21 @@ export async function POST(req: NextRequest) {
 
   // A phone number that matches neither a Patient nor a Caregiver record —
   // handled explicitly rather than falling through, since there's no patient
-  // context to attach a symptom/coping log to.
+  // context (or language preference) to reply with. Looked up before the
+  // empty-body check below so THAT reply can be localized once we know who
+  // sent it.
   const sender = await findSenderByPhone(from);
   if (!sender) {
-    return twiml(
-      "This number isn't recognized by CareSignal. If you're a patient or caregiver, please contact your care team to get set up."
-    );
+    return twiml(t("unrecognizedNumber", "en"));
+  }
+  const lang = senderLang(sender);
+
+  // An empty Body (e.g. a photo-only MMS, or a blank text) DOES have a real,
+  // known sender we can reply to in their own language — unlike the
+  // missing-From case, this gets a friendly SMS reply rather than a raw
+  // JSON error.
+  if (!body) {
+    return twiml(t("emptyBody", lang));
   }
 
   // Safety net for anything not already caught inside handleMessage() — a
@@ -227,9 +221,9 @@ export async function POST(req: NextRequest) {
   // real reply instead of a raw 500, and the actual error is still logged
   // with the sender's phone number for debugging.
   try {
-    return await handleMessage(sender, body);
+    return await handleMessage(sender, body, lang);
   } catch (err) {
     console.error(`[twilio/inbound] unhandled error processing message from ${from}:`, err);
-    return twiml(GENERIC_FALLBACK_MESSAGE);
+    return twiml(t("genericFallback", lang));
   }
 }
