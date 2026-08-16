@@ -51,3 +51,11 @@ npx tsx scripts/demo-trigger.ts trahan-burden       # caregiver burden flag
 Then just refresh the dashboard tab.
 
 **Safe to re-trigger** — each one resets its patient first, so clicking twice doesn't double up or break anything. Good to run once before you go on, just to confirm it's warm.
+
+## Multi-language support (French)
+
+- `Patient.preferredLanguage` / `Caregiver.preferredLanguage` (`"en"` or `"fr"`) drive outbound SMS — every reply the webhook sends (check-in acknowledgments, clarifying questions, error messages) is looked up from `lib/i18n.ts`'s bilingual catalog in the sender's own language, not the patient's by default (a caregiver gets replies in *their* preferred language, independent of the patient's).
+- Inbound freeform parsing handles French input directly — no separate French pipeline, the same `lib/ai.ts` prompts just tell the model the message may be in French and to keep field extraction language-agnostic. **This was verified live against the real model**, not assumed: correctly extracted symptom scores from French text, and — unprompted — correctly converted a Celsius temperature ("39 degrés" / "39.5 degrés") to Fahrenheit (102.2°F / 103.1°F) without being told to handle unit conversion. That's a genuinely useful, non-obvious capability worth mentioning if asked "does it handle French" — it handles more than the language.
+- Seeded demo patient: Émile Thibodeaux (Lafourche Parish, `preferredLanguage: "fr"`), with a real French freeform message in his check-in history, not a placeholder.
+
+**Honest scope note — say this proactively if multi-language comes up, don't wait to be asked:** this is *standard* French, not Louisiana Cajun French. Cajun French differs from standard French in vocabulary, some grammar, and pronunciation in ways a text channel can't fully capture, and verifying dialect-accurate phrasing was out of scope for this build. If a judge asks specifically about Cajun French: "We built standard French support and verified it works, including some things we didn't even prompt for like Celsius conversion. We did not attempt to verify Cajun French dialect authenticity — that would need review from a native speaker before we'd claim it, and we'd rather say that plainly than overclaim regional authenticity we haven't tested."

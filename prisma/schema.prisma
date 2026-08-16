@@ -19,6 +19,7 @@ model Patient {
   cancerType  String
   chemoCycle  String
   parish      String // e.g. "Terrebonne", "Lafourche"
+  preferredLanguage String @default("en") // "en" or "fr" — outbound SMS is sent in this language, see lib/i18n.ts
   riskStatus  String       @default("GREEN") // GREEN, YELLOW, RED — TODAY's symptom risk
   riskScore   Float        @default(0) // daily risk model probability 0-1
   hospitalizationRiskScore Float @default(0) // separate model: probability of hospitalization within the next 7 days — a different time horizon and claim from riskStatus/riskScore, never merged into it
@@ -34,6 +35,7 @@ model Caregiver {
   lastName      String
   phone         String         @unique
   relationship  String
+  preferredLanguage String     @default("en") // independent of the patient's — a caregiver may prefer a different language
   patientId     String         @unique
   patient       Patient        @relation(fields: [patientId], references: [id])
   caregiverLogs CaregiverLog[]
