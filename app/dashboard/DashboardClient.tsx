@@ -50,6 +50,7 @@ export interface DashboardPatient extends QueuePatient {
   // model, separate time horizon (7-day forecast, not today's status),
   // never merged into riskStatus/riskScore.
   hospitalizationRiskFactors: string[];
+  hospitalizationHasRecentHistory: boolean;
 }
 
 export function DashboardClient({
@@ -164,6 +165,7 @@ export function DashboardClient({
             <HospitalizationRiskPanel
               score={selected.hospitalizationRiskScore}
               factors={selected.hospitalizationRiskFactors}
+              hasRecentHistory={selected.hospitalizationHasRecentHistory}
             />
 
             {/* No risk-level gate here on purpose — transportation burden comes
