@@ -18,6 +18,7 @@ model Patient {
   phone       String       @unique
   cancerType  String
   chemoCycle  String
+  treatmentFrequency String @default("every_3_weeks") // "weekly" | "every_2_weeks" | "every_3_weeks" | "monthly" — how often the patient's regimen brings them in, based on the standard dosing schedule for that regimen type (not a real scheduling feed). Drives the SDOH transportation suggestion trigger — see lib/transportationResources.ts.
   parish      String // e.g. "Terrebonne", "Lafourche"
   preferredLanguage String @default("en") // "en", "fr", or "es" — outbound SMS is sent in this language, see lib/i18n.ts
   riskStatus  String       @default("GREEN") // GREEN, YELLOW, RED — TODAY's symptom risk
