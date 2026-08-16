@@ -8,6 +8,22 @@ import type { DailySymptoms } from "./riskEngine";
 
 export type LogSource = "PATIENT_SMS" | "CAREGIVER_SMS" | "WEB";
 
+// NOT wrapped in a prisma.$transaction() — tried that, load-tested it, and
+// reverted it. See docs/load-test-results.md for the full story: SQLite
+// under Prisma's interactive-transaction model queues concurrent
+// transactions badly (each one holds the connection across multiple
+// round-trip queries), and at 50-100 concurrent requests it started hitting
+// Prisma's 5s interactive-transaction timeout — "Transaction already
+// closed" / "Socket timeout" — which LOST writes outright, and pushed
+// average latency into the 10-20+ second range. That is a strictly worse
+// outcome than the race condition the transaction was meant to prevent,
+// which was never actually observed (load-tested up to 60 concurrent
+// same-patient requests without one, most likely because SQLite's
+// single-writer semantics already serialize this closely enough in
+// practice). If this ever moves to a real multi-connection database
+// (Postgres), re-evaluate wrapping this in a transaction — that database
+// won't have the same queuing behavior — but do not reintroduce it on
+// SQLite without re-running the load test.
 export async function recordSymptomLog(params: {
   patientId: string;
   pain: number;
@@ -125,9 +141,6 @@ export async function findSenderByPhone(phone: string): Promise<Sender | null> {
   return null;
 }
 
-const STRUCTURED_SYMPTOM_RE = /^(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)$/;
-const STRUCTURED_CAREGIVER_RE = /^(\d+)\s*,\s*(\d+)$/;
-
 // Plausible human ranges — the regexes above only check "is this shaped like
 // numbers," not "are these numbers sane." Without this, a message like
 // "99,99,99,999" would parse as a structured symptom report with a 999°F
@@ -135,6 +148,9 @@ const STRUCTURED_CAREGIVER_RE = /^(\d+)\s*,\s*(\d+)$/;
 // treated as NOT structured (returns null) so the caller falls through to
 // freeform AI parsing instead, whose JSON-schema output bounds (see
 // lib/ai.ts) constrain the model's answer even on a weird input.
+const STRUCTURED_SYMPTOM_RE = /^(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)$/;
+const STRUCTURED_CAREGIVER_RE = /^(\d+)\s*,\s*(\d+)$/;
+
 const SCORE_MIN = 0;
 const SCORE_MAX = 10;
 const FEVER_MIN_F = 90;
