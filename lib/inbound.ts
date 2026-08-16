@@ -128,13 +128,38 @@ export async function findSenderByPhone(phone: string): Promise<Sender | null> {
 const STRUCTURED_SYMPTOM_RE = /^(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)$/;
 const STRUCTURED_CAREGIVER_RE = /^(\d+)\s*,\s*(\d+)$/;
 
+// Plausible human ranges — the regexes above only check "is this shaped like
+// numbers," not "are these numbers sane." Without this, a message like
+// "99,99,99,999" would parse as a structured symptom report with a 999°F
+// fever and write that straight into the risk engine. Out-of-range input is
+// treated as NOT structured (returns null) so the caller falls through to
+// freeform AI parsing instead, whose JSON-schema output bounds (see
+// lib/ai.ts) constrain the model's answer even on a weird input.
+const SCORE_MIN = 0;
+const SCORE_MAX = 10;
+const FEVER_MIN_F = 90;
+const FEVER_MAX_F = 110;
+const COPING_MIN = 1;
+const COPING_MAX = 5;
+
+function inRange(value: number, min: number, max: number): boolean {
+  return Number.isFinite(value) && value >= min && value <= max;
+}
+
 export function parseStructuredSymptoms(
   text: string
 ): { pain: number; nausea: number; fatigue: number; fever: number } | null {
   const match = text.trim().match(STRUCTURED_SYMPTOM_RE);
   if (!match) return null;
   const [, pain, nausea, fatigue, fever] = match;
-  return { pain: Number(pain), nausea: Number(nausea), fatigue: Number(fatigue), fever: Number(fever) };
+  const parsed = { pain: Number(pain), nausea: Number(nausea), fatigue: Number(fatigue), fever: Number(fever) };
+  const scoresValid =
+    inRange(parsed.pain, SCORE_MIN, SCORE_MAX) &&
+    inRange(parsed.nausea, SCORE_MIN, SCORE_MAX) &&
+    inRange(parsed.fatigue, SCORE_MIN, SCORE_MAX);
+  const feverValid = inRange(parsed.fever, FEVER_MIN_F, FEVER_MAX_F);
+  if (!scoresValid || !feverValid) return null;
+  return parsed;
 }
 
 export function parseStructuredCaregiverCheckin(
@@ -143,5 +168,8 @@ export function parseStructuredCaregiverCheckin(
   const match = text.trim().match(STRUCTURED_CAREGIVER_RE);
   if (!match) return null;
   const [, patientStatus, copingScore] = match;
-  return { patientStatus: Number(patientStatus), copingScore: Number(copingScore) };
+  const parsed = { patientStatus: Number(patientStatus), copingScore: Number(copingScore) };
+  const valid = inRange(parsed.patientStatus, COPING_MIN, COPING_MAX) && inRange(parsed.copingScore, COPING_MIN, COPING_MAX);
+  if (!valid) return null;
+  return parsed;
 }

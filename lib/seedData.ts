@@ -10,7 +10,18 @@ export function daysAgo(n: number, hour = 8): Date {
   const d = new Date();
   d.setHours(hour, 0, 0, 0);
   d.setDate(d.getDate() - n);
-  return d;
+
+  // Clamp to "now" if this computed timestamp would land in the future.
+  // Found via testing: if the seed script runs before `hour` (e.g. seeded
+  // at 2am, "day 0" defaults to "today at 8am"), the seeded day-0 entry
+  // gets a timestamp LATER than a live SMS sent in between — so the risk
+  // engine picks the stale seeded entry as "most recent" over the real live
+  // message and silently computes the wrong risk level. No error, no
+  // crash, just a quietly wrong answer, which is worse. Live-recorded logs
+  // (lib/inbound.ts) aren't affected — they use Prisma's real now() default
+  // — only this fixture-data helper needed the guard.
+  const now = new Date();
+  return d > now ? now : d;
 }
 
 export interface SeedSymptomDay {
