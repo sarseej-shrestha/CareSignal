@@ -150,3 +150,49 @@ describe("parseCaregiverMessageText", () => {
     expect(result.caregiverCoping).toEqual({ patientStatus: 1, copingScore: 5 });
   });
 });
+
+describe("generateSoapNote", () => {
+  const baseContext = {
+    patientName: "Jane Doe",
+    cancerType: "Breast cancer",
+    chemoCycle: "Cycle 2 of 6",
+    riskStatus: "RED" as const,
+    riskScore: 0.95,
+    hospitalizationRiskScore: 0.4,
+    activeAlertReasons: ["Fever 101.3°F ≥ 100.4°F — potential neutropenic fever"],
+    recentLogs: [{ daysAgo: 0, pain: 7, nausea: 6, fatigue: 8, fever: 101.3, source: "PATIENT_SMS" }],
+    caregiverBurdenNote: null,
+  };
+
+  it("returns the four SOAP sections plus a combined fullText", async () => {
+    mockCreate.mockResolvedValueOnce(
+      chatResponse({
+        subjective: "Patient reports worsening pain and fever.",
+        objective: "Pain 7/10, fever 101.3°F.",
+        assessment: "Possible neutropenic fever, Grade 3 pain.",
+        plan: "Consider urgent evaluation.",
+      })
+    );
+    const { generateSoapNote } = await import("@/lib/ai");
+    const note = await generateSoapNote(baseContext);
+
+    expect(note.subjective).toContain("worsening pain");
+    expect(note.objective).toContain("101.3");
+    expect(note.assessment).toContain("neutropenic");
+    expect(note.plan).toContain("Consider");
+    expect(note.fullText).toContain("S: Patient reports worsening pain and fever.");
+    expect(note.fullText).toContain("P: Consider urgent evaluation.");
+  });
+
+  it("throws when the model returns no content", async () => {
+    mockCreate.mockResolvedValueOnce({ choices: [{ message: {} }] });
+    const { generateSoapNote } = await import("@/lib/ai");
+    await expect(generateSoapNote(baseContext)).rejects.toThrow(/no content/i);
+  });
+
+  it("propagates an API error rather than swallowing it", async () => {
+    mockCreate.mockRejectedValueOnce(new Error("Groq timeout"));
+    const { generateSoapNote } = await import("@/lib/ai");
+    await expect(generateSoapNote(baseContext)).rejects.toThrow(/timeout/i);
+  });
+});
