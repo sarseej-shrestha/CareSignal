@@ -9,6 +9,7 @@ import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendCha
 import { RiskBadge } from "@/components/RiskBadge";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
+import { sortByRiskPriority } from "@/lib/sortPatients";
 
 export interface CaregiverLogView {
   id: string;
@@ -41,8 +42,6 @@ export interface DashboardPatient extends QueuePatient {
   caregiverBurdenReasons: string[] | null;
 }
 
-const RISK_ORDER = { RED: 0, YELLOW: 1, GREEN: 2 } as const;
-
 export function DashboardClient({
   patients,
   demoModeEnabled,
@@ -50,15 +49,7 @@ export function DashboardClient({
   patients: DashboardPatient[];
   demoModeEnabled: boolean;
 }) {
-  const sortedQueue = useMemo(
-    () =>
-      [...patients].sort((a, b) => {
-        const rankDiff = RISK_ORDER[a.riskStatus] - RISK_ORDER[b.riskStatus];
-        if (rankDiff !== 0) return rankDiff;
-        return b.riskScore - a.riskScore;
-      }),
-    [patients]
-  );
+  const sortedQueue = useMemo(() => sortByRiskPriority(patients), [patients]);
 
   const burdenPatients = useMemo(() => patients.filter((p) => p.caregiverBurdenReasons), [patients]);
 
