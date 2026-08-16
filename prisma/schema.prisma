@@ -19,13 +19,14 @@ model Patient {
   cancerType  String
   chemoCycle  String
   parish      String // e.g. "Terrebonne", "Lafourche"
-  preferredLanguage String @default("en") // "en" or "fr" — outbound SMS is sent in this language, see lib/i18n.ts
+  preferredLanguage String @default("en") // "en", "fr", or "es" — outbound SMS is sent in this language, see lib/i18n.ts
   riskStatus  String       @default("GREEN") // GREEN, YELLOW, RED — TODAY's symptom risk
   riskScore   Float        @default(0) // daily risk model probability 0-1
   hospitalizationRiskScore Float @default(0) // separate model: probability of hospitalization within the next 7 days — a different time horizon and claim from riskStatus/riskScore, never merged into it
   caregiver   Caregiver?
   symptomLogs SymptomLog[]
   alerts      RiskAlert[]
+  soapNotes   SoapNote[]
   createdAt   DateTime     @default(now())
 }
 
@@ -73,6 +74,29 @@ model RiskAlert {
   reasons   String // JSON array of human-readable reasons
   modelProb Float? // classifier output, if applicable
   status    String   @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED
-  soapNote  String?
   createdAt DateTime @default(now())
+}
+
+// SOAP notes are their own first-class entity, not a field bolted onto
+// RiskAlert — a note can exist (and be reviewed) for any patient, not only
+// one with an open alert, and its review lifecycle is independent of the
+// alert's. status starts "DRAFT" and can only become "REVIEWED" through the
+// explicit review endpoint (app/api/ai/soap-note/[id]/review) — there is no
+// code path that creates a note already marked reviewed. See
+// components/SoapNoteGenerator.tsx and docs/pitch-notes.md's SOAP note
+// safety section.
+model SoapNote {
+  id                String    @id @default(uuid())
+  patientId         String
+  patient           Patient   @relation(fields: [patientId], references: [id])
+  subjective        String
+  objective         String
+  assessment        String
+  plan              String
+  fullText          String
+  confidenceLevel   String // "HIGH" | "LIMITED" — a deterministic heuristic (lib/soapNoteConfidence.ts), not the LLM self-assessing
+  confidenceReasons String // JSON array of human-readable reasons for a LIMITED rating
+  status            String    @default("DRAFT") // DRAFT | REVIEWED
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
 }
