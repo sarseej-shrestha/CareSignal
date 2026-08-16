@@ -244,3 +244,103 @@ export async function parseCaregiverMessageText(text: string): Promise<ParsedCar
     summary: parsed.summary,
   };
 }
+
+// --- SOAP note generation ---
+// Synthesizes a patient's recent check-in history and active alert reasons
+// into a structured SOAP note (Subjective / Objective / Assessment / Plan) —
+// a standard clinical documentation format — for a nurse to review and
+// copy/adapt into the EHR. This is a documentation aid, not an autonomous
+// clinical decision: the Plan section is phrased as suggestions for the
+// care team to consider, not orders.
+
+export interface SoapNoteContext {
+  patientName: string;
+  cancerType: string;
+  chemoCycle: string;
+  riskStatus: "GREEN" | "YELLOW" | "RED";
+  riskScore: number;
+  hospitalizationRiskScore: number;
+  activeAlertReasons: string[];
+  recentLogs: { daysAgo: number; pain: number; nausea: number; fatigue: number; fever: number; source: string }[];
+  caregiverBurdenNote: string | null;
+}
+
+export interface SoapNote {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  fullText: string;
+}
+
+const SOAP_NOTE_SCHEMA = {
+  type: "object",
+  properties: {
+    subjective: { type: "string", description: "What the patient/caregiver reported, in their own words/paraphrase — symptoms, timeline, concerns." },
+    objective: { type: "string", description: "Measurable data: the logged pain/nausea/fatigue/fever values and trend over the recent check-ins, and the current risk model outputs." },
+    assessment: { type: "string", description: "Clinical interpretation: what the data pattern suggests, referencing PRO-CTCAE grading and the neutropenic fever threshold (100.4°F) where relevant." },
+    plan: { type: "string", description: "Suggested next steps for the care team to consider (e.g., callback, labs, symptom management guidance) — phrased as suggestions, not orders, since a nurse reviews this before acting." },
+  },
+  required: ["subjective", "objective", "assessment", "plan"],
+  additionalProperties: false,
+} as const;
+
+const SOAP_NOTE_SYSTEM_PROMPT = `You are a clinical documentation assistant for CareSignal, an oncology remote symptom-monitoring
+system. Given a patient's recent SMS check-in history and any active risk-alert reasons, write a SOAP note
+(Subjective, Objective, Assessment, Plan) summarizing the situation for the oncology nurse reviewing it.
+
+Conventions: use PRO-CTCAE-style grading language (e.g., "Grade 2 nausea") where symptom scores support it, cite
+the 100.4°F neutropenic fever threshold explicitly if fever is relevant, and keep each section concise (2-4
+sentences) — this is a quick clinical summary, not a full chart note. The Plan section must be phrased as
+suggestions for the nurse to weigh ("consider," "recommend"), never as directives, since a licensed clinician
+reviews and decides before anything happens. If the data is unremarkable, say so plainly rather than inventing
+concern that isn't supported by the numbers.`;
+
+export async function generateSoapNote(context: SoapNoteContext): Promise<SoapNote> {
+  const openai = getClient();
+
+  const logLines = context.recentLogs
+    .map((l) => `  ${l.daysAgo === 0 ? "today" : `${l.daysAgo}d ago`} (${l.source}): pain ${l.pain}/10, nausea ${l.nausea}/10, fatigue ${l.fatigue}/10, fever ${l.fever.toFixed(1)}°F`)
+    .join("\n");
+
+  const userContent = `Patient: ${context.patientName}
+Diagnosis: ${context.cancerType}, ${context.chemoCycle}
+Current daily risk status: ${context.riskStatus} (model probability ${context.riskScore.toFixed(2)})
+7-day hospitalization-risk forecast: ${(context.hospitalizationRiskScore * 100).toFixed(0)}%
+
+Recent check-ins (most recent last):
+${logLines || "  (no check-ins on file)"}
+
+Active clinical alert reasons:
+${context.activeAlertReasons.length ? context.activeAlertReasons.map((r) => `  - ${r}`).join("\n") : "  (none open)"}
+
+${context.caregiverBurdenNote ? `Caregiver note: ${context.caregiverBurdenNote}` : ""}`;
+
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: SOAP_NOTE_SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "soap_note", strict: true, schema: SOAP_NOTE_SCHEMA },
+    },
+    temperature: 0.2,
+    max_tokens: MAX_COMPLETION_TOKENS,
+  });
+
+  const raw = completion.choices[0]?.message?.content;
+  if (!raw) throw new Error("Model returned no content for SOAP note generation.");
+  const parsed = JSON.parse(raw);
+
+  const fullText = `S: ${parsed.subjective}\n\nO: ${parsed.objective}\n\nA: ${parsed.assessment}\n\nP: ${parsed.plan}`;
+
+  return {
+    subjective: parsed.subjective,
+    objective: parsed.objective,
+    assessment: parsed.assessment,
+    plan: parsed.plan,
+    fullText,
+  };
+}
