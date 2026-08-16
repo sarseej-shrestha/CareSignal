@@ -1,18 +1,21 @@
 import { Bus } from "lucide-react";
+import { getTransportationSuggestion, type TreatmentFrequency } from "@/lib/transportationResources";
 
 // A triggered SUGGESTION, not a booking flow — no scheduling, no form, just
-// a pointer to the right kind of resource, tied to the patient's actual
-// parish (not generic "rural Louisiana" copy). Only mentions Louisiana 211
-// by name since that's a real, verifiable statewide referral line; anything
-// more specific (an org's phone number, hours, eligibility rules) would be
-// unverified detail this project shouldn't present as fact.
-const PARISH_NOTE: Record<string, string> = {
-  Terrebonne: "Terrebonne Parish has a Council on Aging that provides medical transportation for eligible residents.",
-  Lafourche: "Lafourche Parish has a Council on Aging that provides medical transportation for eligible residents.",
-};
-
-export function SdohActionCard({ parish }: { parish: string }) {
-  const note = PARISH_NOTE[parish];
+// pointers to real, individually verified local resources (see
+// lib/transportationResources.ts for what was actually checked and where).
+// Renders nothing unless the patient's treatment frequency makes
+// transportation a RECURRING barrier — see that file's trigger-logic note.
+// A parish match alone is no longer enough to surface this.
+export function SdohActionCard({
+  parish,
+  treatmentFrequency,
+}: {
+  parish: string;
+  treatmentFrequency: TreatmentFrequency;
+}) {
+  const suggestion = getTransportationSuggestion({ parish, treatmentFrequency });
+  if (!suggestion) return null;
 
   return (
     <div className="rounded-lg border border-dashed p-3">
@@ -20,12 +23,17 @@ export function SdohActionCard({ parish }: { parish: string }) {
         <Bus className="size-4" />
         Suggested resource: transportation assistance
       </div>
-      <p className="text-xs text-muted-foreground">
-        {note ? `${note} ` : ""}
-        For {parish} Parish medical transportation options, contact{" "}
-        <strong className="text-foreground">211 (Louisiana 211)</strong> — a statewide referral line for
-        transportation, financial, and other support services — or connect the patient with their care coordinator.
-      </p>
+      <p className="mb-2 text-xs text-muted-foreground">{suggestion.reason}</p>
+      <ul className="space-y-2">
+        {suggestion.resources.map((r) => (
+          <li key={r.name} className="text-xs text-muted-foreground">
+            <div>
+              <strong className="text-foreground">{r.name}</strong> — {r.phone}
+            </div>
+            {r.detail}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

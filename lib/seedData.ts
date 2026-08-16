@@ -49,6 +49,14 @@ export interface SeedPatient {
   phone: string;
   cancerType: string;
   chemoCycle: string;
+  // "weekly" | "every_2_weeks" | "every_3_weeks" | "monthly" — the standard
+  // dosing interval for that cancer type's typical first-line regimen (e.g.
+  // FOLFOX/FOLFIRINOX every 2 weeks, weekly bortezomib for myeloma,
+  // carboplatin-based NSCLC regimens every 3 weeks). This is a reasonable
+  // regimen-type default for synthetic demo data, not a real per-patient
+  // schedule pulled from an EHR — see lib/transportationResources.ts for
+  // how it's used.
+  treatmentFrequency: "weekly" | "every_2_weeks" | "every_3_weeks" | "monthly";
   parish: string;
   preferredLanguage?: "en" | "fr" | "es";
   logs: SeedSymptomDay[];
@@ -70,6 +78,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550142",
     cancerType: "Breast cancer",
     chemoCycle: "Cycle 3 of 6",
+    treatmentFrequency: "every_2_weeks", // dose-dense AC-T is a common standard schedule
     parish: "Terrebonne",
     logs: [
       { daysAgo: 6, pain: 1, nausea: 1, fatigue: 3, fever: 98.3 },
@@ -89,6 +98,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550143",
     cancerType: "Colorectal cancer",
     chemoCycle: "Cycle 2 of 8",
+    treatmentFrequency: "every_2_weeks", // FOLFOX/FOLFIRI standard interval
     parish: "Lafourche",
     logs: [
       { daysAgo: 6, pain: 2, nausea: 2, fatigue: 4, fever: 98.4 },
@@ -122,6 +132,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550144",
     cancerType: "Non-small cell lung cancer",
     chemoCycle: "Cycle 4 of 6",
+    treatmentFrequency: "every_3_weeks", // carboplatin-based regimens standard interval
     parish: "Terrebonne",
     logs: [
       { daysAgo: 5, pain: 2, nausea: 2, fatigue: 4, fever: 98.4 },
@@ -148,6 +159,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550145",
     cancerType: "Prostate cancer",
     chemoCycle: "Cycle 1 of 6",
+    treatmentFrequency: "every_3_weeks", // docetaxel standard interval
     parish: "Lafourche",
     logs: [
       { daysAgo: 6, pain: 1, nausea: 0, fatigue: 3, fever: 98.3 },
@@ -184,6 +196,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550146",
     cancerType: "Pancreatic cancer",
     chemoCycle: "Cycle 5 of 6",
+    treatmentFrequency: "every_2_weeks", // FOLFIRINOX standard interval
     parish: "Terrebonne",
     logs: [
       { daysAgo: 6, pain: 3, nausea: 3, fatigue: 5, fever: 98.4 },
@@ -231,6 +244,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550147",
     cancerType: "Acute myeloid leukemia",
     chemoCycle: "Cycle 2 of 4",
+    treatmentFrequency: "weekly", // non-intensive AML regimens (e.g. azacitidine-based) require frequent labs/visits during active dosing days
     parish: "Lafourche",
     logs: [
       { daysAgo: 5, pain: 2, nausea: 2, fatigue: 4, fever: 98.3, source: "PATIENT_SMS", rawSmsText: "2,2,4,98.3" },
@@ -285,6 +299,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550148",
     cancerType: "Multiple myeloma",
     chemoCycle: "Cycle 3 of 6",
+    treatmentFrequency: "weekly", // weekly subcutaneous bortezomib is a standard RVd-regimen schedule
     parish: "Lafourche",
     preferredLanguage: "fr",
     logs: [
@@ -317,6 +332,7 @@ export const patients: SeedPatient[] = [
     phone: "+19855550149",
     cancerType: "Colon cancer",
     chemoCycle: "Cycle 4 of 6",
+    treatmentFrequency: "every_2_weeks", // FOLFOX standard interval
     parish: "Terrebonne",
     preferredLanguage: "es",
     logs: [
