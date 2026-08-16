@@ -44,6 +44,7 @@ export default async function DashboardPage() {
 
     return {
       id: p.id,
+      mrn: p.mrn,
       firstName: p.firstName,
       lastName: p.lastName,
       parish: p.parish,
