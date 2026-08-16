@@ -10,6 +10,8 @@ import { RiskBadge } from "@/components/RiskBadge";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
 import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
+import { SdohActionCard } from "@/components/SdohActionCard";
+import { SoapNoteGenerator } from "@/components/SoapNoteGenerator";
 import { sortByRiskPriority } from "@/lib/sortPatients";
 
 export interface CaregiverLogView {
@@ -157,6 +159,12 @@ export function DashboardClient({
               score={selected.hospitalizationRiskScore}
               factors={selected.hospitalizationRiskFactors}
             />
+
+            {(selected.riskStatus !== "GREEN" || selected.hospitalizationRiskScore >= 0.3) && (
+              <SdohActionCard parish={selected.parish} />
+            )}
+
+            <SoapNoteGenerator patientId={selected.id} />
 
             <SymptomTrendChart data={selected.logs} />
 
