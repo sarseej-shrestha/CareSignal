@@ -66,6 +66,20 @@ describe("POST /api/twilio/inbound", () => {
     expect(logs).toHaveLength(1); // language only affects the reply text, not what's recorded
   });
 
+  it("replies in Spanish for a patient with preferredLanguage 'es'", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551097", preferredLanguage: "es" });
+    const res = await POST(formRequest({ From: "+19995551097", To: "+1900", Body: "1,1,2,98.4" }));
+
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("Gracias");
+    expect(xml).not.toContain("Thanks");
+    expect(xml).not.toContain("Merci");
+
+    const logs = await prisma.symptomLog.findMany({ where: { patientId: patient.id } });
+    expect(logs).toHaveLength(1);
+  });
+
   it("replies in English by default when preferredLanguage is unset", async () => {
     await seedTestPatient({ phone: "+19995551098" });
     const res = await POST(formRequest({ From: "+19995551098", To: "+1900", Body: "1,1,2,98.4" }));

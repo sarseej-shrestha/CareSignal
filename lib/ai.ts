@@ -106,9 +106,9 @@ If a temperature or fever is mentioned, extract it in Fahrenheit; if the patient
 feverF to 98.6 and feverMentioned to true. If fever is not discussed at all, set feverF to 98.6 and feverMentioned
 to false. Never invent a high fever the patient didn't describe.
 
-The patient's message may be written in English or French (CareSignal serves a Louisiana population with French
-speakers). Extract the same fields regardless of the message's language. Always write the "summary" field in
-English, since it's read by the English-speaking clinical care team.`;
+The patient's message may be written in English, French, or Spanish (CareSignal serves a Louisiana population that
+includes French and Spanish speakers). Extract the same fields regardless of the message's language. Always write
+the "summary" field in English, since it's read by the English-speaking clinical care team.`;
 
 export async function parsePatientSymptomText(text: string): Promise<ParsedPatientSymptoms> {
   const openai = getClient();
@@ -198,10 +198,10 @@ their own state, BOTH if the message does both, UNCLEAR if genuinely ambiguous (
 for whichever fields you can and set the other to null only if truly not addressed at all). Only fill in
 patientSymptoms or caregiverCoping if that intent applies; otherwise set that field to null.
 
-The caregiver's message may be written in English or French (CareSignal serves a Louisiana population with French
-speakers). Extract the same fields regardless of the message's language — watch for the same burden/exhaustion
-signals whether expressed in English or French. Always write the "summary" field in English, since it's read by
-the English-speaking clinical care team.`;
+The caregiver's message may be written in English, French, or Spanish (CareSignal serves a Louisiana population that
+includes French and Spanish speakers). Extract the same fields regardless of the message's language — watch for the
+same burden/exhaustion signals whether expressed in English, French, or Spanish. Always write the "summary" field in
+English, since it's read by the English-speaking clinical care team.`;
 
 export async function parseCaregiverMessageText(text: string): Promise<ParsedCaregiverMessage> {
   const openai = getClient();
