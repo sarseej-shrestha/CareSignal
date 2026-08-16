@@ -5,7 +5,9 @@ node_modules/
 dev.db
 *.db
 CLAUDE.md
-AGENT.md# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+AGENTS.md
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
 /node_modules
