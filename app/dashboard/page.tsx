@@ -56,6 +56,7 @@ export default async function DashboardPage() {
       hasCaregiverBurden: !!burdenAlert,
       hospitalizationRiskScore: hosp.score,
       hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
+      hospitalizationHasRecentHistory: hosp.hasRecentHistory,
       reasons: clinicalAlert ? (JSON.parse(clinicalAlert.reasons) as string[]) : [],
       logs: p.symptomLogs.map((log) => ({
         date: log.createdAt.toISOString(),

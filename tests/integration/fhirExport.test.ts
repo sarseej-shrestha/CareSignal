@@ -11,6 +11,37 @@ describe("buildFhirBundle", () => {
     expect(await buildFhirBundle("does-not-exist")).toBeNull();
   });
 
+  it("produces a small but well-formed bundle for a brand-new patient with no logs, alerts, or caregiver — not empty or malformed", async () => {
+    const patient = await seedTestPatient();
+    const bundle = await buildFhirBundle(patient.id);
+
+    expect(bundle).not.toBeNull();
+    expect(bundle!.resourceType).toBe("Bundle");
+    // Patient + Condition + the always-present hospitalization RiskAssessment
+    // (score 0, since there's no history to elevate it) — nothing else, since
+    // there's genuinely nothing else to report yet.
+    const resources = bundle!.entry.map((e) => e.resource);
+    expect(resources.map((r: any) => r.resourceType).sort()).toEqual(["Condition", "Patient", "RiskAssessment"]);
+    expect(resources.filter((r: any) => r.resourceType === "Observation")).toHaveLength(0);
+    expect(resources.filter((r: any) => r.resourceType === "Flag")).toHaveLength(0);
+
+    const hospRisk = resources.find((r: any) => r.id.startsWith("hosp-risk-")) as any;
+    expect(hospRisk.prediction[0].probabilityDecimal).toBe(0);
+
+    // Every entry still has a valid fullUrl even in this minimal case.
+    for (const entry of bundle!.entry as any[]) {
+      expect(entry.fullUrl).toMatch(/^urn:uuid:/);
+    }
+  });
+
+  it("falls back to 'en' for an invalid/garbage preferredLanguage value instead of embedding it raw", async () => {
+    const patient = await seedTestPatient({ preferredLanguage: "not-a-real-language-code" });
+    const bundle = await buildFhirBundle(patient.id);
+
+    const patientResource = bundle!.entry.map((e) => e.resource).find((r: any) => r.resourceType === "Patient") as any;
+    expect(patientResource.communication[0].language.coding[0].code).toBe("en");
+  });
+
   it("includes a Patient and Condition resource with correct identifiers", async () => {
     const patient = await seedTestPatient({ mrn: "MRN-1", firstName: "Ada", lastName: "Lovelace", cancerType: "Leukemia" });
     const bundle = await buildFhirBundle(patient.id);

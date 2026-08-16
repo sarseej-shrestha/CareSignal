@@ -24,6 +24,32 @@ describe("computeHospitalizationRisk", () => {
     });
   });
 
+  it("flags hasRecentHistory=false for a brand-new patient — the returned score is a real number (the model's baseline), not null, but should be caveated in the UI rather than shown as a personalized estimate", async () => {
+    const patient = await seedTestPatient();
+    const result = await computeHospitalizationRisk(patient.id);
+    expect(result.hasRecentHistory).toBe(false);
+    expect(typeof result.score).toBe("number");
+    expect(Number.isFinite(result.score)).toBe(true);
+  });
+
+  it("flags hasRecentHistory=true once there's at least one log in the trailing 7 days, even if it's older than most", async () => {
+    const patient = await seedTestPatient();
+    await prisma.symptomLog.create({
+      data: { patientId: patient.id, pain: 1, nausea: 1, fatigue: 1, fever: 98.4, createdAt: daysAgo(6) },
+    });
+    const result = await computeHospitalizationRisk(patient.id);
+    expect(result.hasRecentHistory).toBe(true);
+  });
+
+  it("flags hasRecentHistory=false again once the only log ages out of the 7-day window", async () => {
+    const patient = await seedTestPatient();
+    await prisma.symptomLog.create({
+      data: { patientId: patient.id, pain: 1, nausea: 1, fatigue: 1, fever: 98.4, createdAt: daysAgo(10) },
+    });
+    const result = await computeHospitalizationRisk(patient.id);
+    expect(result.hasRecentHistory).toBe(false);
+  });
+
   it("only counts alerts and logs within the trailing 7 days, not older history", async () => {
     const patient = await seedTestPatient();
 
