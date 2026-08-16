@@ -17,6 +17,22 @@ import OpenAI from "openai";
 
 const MODEL = "openai/gpt-oss-120b";
 
+// A live pitch can't afford a hung request — the Twilio webhook needs to
+// answer well within Twilio's own ~15s timeout, or the sender gets a carrier
+// error with none of our friendlier fallback messaging. 8s leaves headroom
+// for the rest of the request; maxRetries:1 (not the SDK's default of 2)
+// keeps a transient failure from silently doubling that wait.
+const REQUEST_TIMEOUT_MS = 8_000;
+// gpt-oss-120b is a reasoning model — its completion includes hidden
+// "reasoning" tokens spent before it writes the final JSON, and those count
+// against this budget too. A tight cap (400 was tried and broke a working
+// case: the model got cut off mid-object, missing the required `summary`
+// field, which Groq itself then rejects as a schema-validation error) risks
+// truncating valid output more often than it prevents a runaway response.
+// 2000 is generous headroom for this schema's complexity while still being
+// a real ceiling against a genuinely stuck/looping generation.
+const MAX_COMPLETION_TOKENS = 2000;
+
 let client: OpenAI | null = null;
 
 function getClient(): OpenAI {
@@ -25,9 +41,31 @@ function getClient(): OpenAI {
     if (!apiKey) {
       throw new Error("GROQ_API_KEY is not set — freeform SMS parsing requires it.");
     }
-    client = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
+    client = new OpenAI({
+      apiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+      timeout: REQUEST_TIMEOUT_MS,
+      maxRetries: 1,
+    });
   }
   return client;
+}
+
+// Runtime clamp applied to every model output as defense-in-depth on top of
+// the JSON-schema bounds below — cheap insurance against a provider that
+// enforces schema constraints loosely, or a future schema change that
+// forgets a bound. Never let unvalidated model output reach the database.
+function clampScore(value: number): number {
+  return Math.max(0, Math.min(10, Math.round(value)));
+}
+
+function clampFever(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 98.6;
+  return Math.max(90, Math.min(110, value));
+}
+
+function clampCoping(value: number): number {
+  return Math.max(1, Math.min(5, Math.round(value)));
 }
 
 export interface ParsedPatientSymptoms {
@@ -45,7 +83,12 @@ const PATIENT_SYMPTOM_SCHEMA = {
     pain: { type: "integer", minimum: 0, maximum: 10 },
     nausea: { type: "integer", minimum: 0, maximum: 10 },
     fatigue: { type: "integer", minimum: 0, maximum: 10 },
-    feverF: { type: ["number", "null"], description: "Temperature in Fahrenheit if mentioned, else null." },
+    feverF: {
+      type: ["number", "null"],
+      minimum: 90,
+      maximum: 110,
+      description: "Temperature in Fahrenheit if mentioned, else null. Plausible human range only.",
+    },
     feverMentioned: { type: "boolean" },
     summary: { type: "string", description: "One short clinical-style paraphrase of what the patient reported." },
   },
@@ -76,17 +119,22 @@ export async function parsePatientSymptomText(text: string): Promise<ParsedPatie
       json_schema: { name: "patient_symptoms", strict: true, schema: PATIENT_SYMPTOM_SCHEMA },
     },
     temperature: 0,
+    max_tokens: MAX_COMPLETION_TOKENS,
   });
 
   const raw = completion.choices[0]?.message?.content;
+  // Can happen if the completion gets cut off by max_tokens before finishing
+  // the JSON object, or the provider returns an empty choice — either way
+  // there's nothing to parse, so fail loudly here rather than passing
+  // `undefined` into JSON.parse and getting a confusing SyntaxError instead.
   if (!raw) throw new Error("Model returned no content for patient symptom parsing.");
   const parsed = JSON.parse(raw);
 
   return {
-    pain: parsed.pain,
-    nausea: parsed.nausea,
-    fatigue: parsed.fatigue,
-    fever: parsed.feverF ?? 98.6,
+    pain: clampScore(parsed.pain),
+    nausea: clampScore(parsed.nausea),
+    fatigue: clampScore(parsed.fatigue),
+    fever: clampFever(parsed.feverF),
     feverMentioned: parsed.feverMentioned,
     summary: parsed.summary,
   };
@@ -109,7 +157,7 @@ const CAREGIVER_MESSAGE_SCHEMA = {
         pain: { type: "integer", minimum: 0, maximum: 10 },
         nausea: { type: "integer", minimum: 0, maximum: 10 },
         fatigue: { type: "integer", minimum: 0, maximum: 10 },
-        feverF: { type: ["number", "null"] },
+        feverF: { type: ["number", "null"], minimum: 90, maximum: 110 },
         feverMentioned: { type: "boolean" },
       },
       required: ["pain", "nausea", "fatigue", "feverF", "feverMentioned"],
@@ -159,6 +207,7 @@ export async function parseCaregiverMessageText(text: string): Promise<ParsedCar
       json_schema: { name: "caregiver_message", strict: true, schema: CAREGIVER_MESSAGE_SCHEMA },
     },
     temperature: 0,
+    max_tokens: MAX_COMPLETION_TOKENS,
   });
 
   const raw = completion.choices[0]?.message?.content;
@@ -169,15 +218,20 @@ export async function parseCaregiverMessageText(text: string): Promise<ParsedCar
     intent: parsed.intent,
     patientSymptoms: parsed.patientSymptoms
       ? {
-          pain: parsed.patientSymptoms.pain,
-          nausea: parsed.patientSymptoms.nausea,
-          fatigue: parsed.patientSymptoms.fatigue,
-          fever: parsed.patientSymptoms.feverF ?? 98.6,
+          pain: clampScore(parsed.patientSymptoms.pain),
+          nausea: clampScore(parsed.patientSymptoms.nausea),
+          fatigue: clampScore(parsed.patientSymptoms.fatigue),
+          fever: clampFever(parsed.patientSymptoms.feverF),
           feverMentioned: parsed.patientSymptoms.feverMentioned,
           summary: parsed.summary,
         }
       : null,
-    caregiverCoping: parsed.caregiverCoping,
+    caregiverCoping: parsed.caregiverCoping
+      ? {
+          patientStatus: clampCoping(parsed.caregiverCoping.patientStatus),
+          copingScore: clampCoping(parsed.caregiverCoping.copingScore),
+        }
+      : null,
     summary: parsed.summary,
   };
 }
