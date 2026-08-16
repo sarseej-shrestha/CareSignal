@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateSoapNote } from "@/lib/ai";
+import { assessSoapNoteConfidence } from "@/lib/soapNoteConfidence";
 
 // Generates a SOAP note from a patient's recent check-in history and active
-// alert reasons — a documentation aid for the nurse reviewing the patient,
-// not an autonomous action. If there's an OPEN clinical (YELLOW/RED) alert,
-// the generated note is also saved onto it (RiskAlert.soapNote) so it's not
-// regenerated from scratch on every view; a stable/GREEN patient with no
-// open alert still gets a note back, just not persisted (nothing to attach
-// it to).
+// alert reasons, and PERSISTS it as its own record — status "DRAFT" always,
+// with a deterministic confidence signal computed alongside it. There is no
+// code path here (or anywhere) that creates a note already marked
+// reviewed — see app/api/ai/soap-note/[id]/review/route.ts for the only way
+// a note's status changes.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const patientId = body?.patientId;
@@ -44,6 +44,11 @@ export async function POST(req: NextRequest) {
       source: l.source,
     }));
 
+  const confidence = assessSoapNoteConfidence({
+    logCount: patient.symptomLogs.length,
+    aiParsedLogCount: patient.symptomLogs.filter((l) => l.parsedByAi).length,
+  });
+
   try {
     const note = await generateSoapNote({
       patientName: `${patient.firstName} ${patient.lastName}`,
@@ -57,11 +62,24 @@ export async function POST(req: NextRequest) {
       caregiverBurdenNote: burdenAlert ? (JSON.parse(burdenAlert.reasons) as string[]).join(" ") : null,
     });
 
-    if (clinicalAlert) {
-      await prisma.riskAlert.update({ where: { id: clinicalAlert.id }, data: { soapNote: note.fullText } });
-    }
+    const saved = await prisma.soapNote.create({
+      data: {
+        patientId: patient.id,
+        subjective: note.subjective,
+        objective: note.objective,
+        assessment: note.assessment,
+        plan: note.plan,
+        fullText: note.fullText,
+        confidenceLevel: confidence.level,
+        confidenceReasons: JSON.stringify(confidence.reasons),
+        status: "DRAFT",
+      },
+    });
 
-    return NextResponse.json(note);
+    return NextResponse.json({
+      ...saved,
+      confidenceReasons: confidence.reasons,
+    });
   } catch (err) {
     console.error("[soap-note] generation failed:", err);
     return NextResponse.json({ error: "Failed to generate SOAP note." }, { status: 500 });
