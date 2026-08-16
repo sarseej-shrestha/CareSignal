@@ -1,0 +1,52 @@
+{
+  "trainedAt": "2026-08-16T07:34:38.775Z",
+  "featureNames": [
+    "alertCount7d",
+    "feverRecurrenceCount7d",
+    "severeDayCount7d",
+    "maxTrendDelta7d",
+    "avgDailyModelProb7d",
+    "caregiverBurdenFlag7d"
+  ],
+  "weights": [
+    0.08976270683961761,
+    0.044478798563383284,
+    0.1219881375406331,
+    0.2553790370503285,
+    0.37340155202261766,
+    0.3137788319654492
+  ],
+  "bias": -0.8435072471897194,
+  "featureMeans": [
+    1.4990625,
+    0.402875,
+    1.370125,
+    1.936615480933484,
+    0.21494191108942037,
+    0.1091875
+  ],
+  "featureStds": [
+    1.6509085744200644,
+    0.7598136181821066,
+    1.392706891048842,
+    1.552018057746076,
+    0.21473749745146145,
+    0.31187431738399624
+  ],
+  "threshold": 0.5,
+  "trainingMeta": {
+    "nExamples": 20000,
+    "positiveRate": 0.09585,
+    "testMetrics": {
+      "tp": 206,
+      "fp": 474,
+      "tn": 3139,
+      "fn": 181,
+      "precision": 0.3029411764705882,
+      "recall": 0.5322997416020672,
+      "accuracy": 0.83625,
+      "positiveRate": 0.09675
+    },
+    "caregiverBurdenHospBoost": 0.12
+  }
+}

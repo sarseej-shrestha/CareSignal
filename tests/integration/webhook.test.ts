@@ -46,6 +46,11 @@ describe("POST /api/twilio/inbound", () => {
 
     const updated = await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } });
     expect(updated.riskStatus).toBe("RED");
+    // A fever >=100.4 + severe pain/nausea this recently should also register
+    // as a real hospitalization-risk signal (fever recurrence + severe day +
+    // high daily model prob all feed the 7-day rolling features) — not left
+    // at its default 0.
+    expect(updated.hospitalizationRiskScore).toBeGreaterThan(0);
   });
 
   it("records a freeform patient symptom report via the mocked AI parser", async () => {

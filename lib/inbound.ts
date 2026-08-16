@@ -5,6 +5,7 @@
 import { prisma } from "./db";
 import { assessRisk, type RiskAssessment } from "./risk";
 import type { DailySymptoms } from "./riskEngine";
+import { computeHospitalizationRisk } from "./hospitalizationRisk";
 
 export type LogSource = "PATIENT_SMS" | "CAREGIVER_SMS" | "WEB";
 
@@ -77,6 +78,12 @@ export async function recordSymptomLog(params: {
     });
   }
 
+  // Separate model, separate time horizon — recomputed alongside the daily
+  // assessment (a new symptom log changes the rolling 7-day features it's
+  // built from) but never merged into riskStatus/riskScore above.
+  const hosp = await computeHospitalizationRisk(params.patientId);
+  await prisma.patient.update({ where: { id: params.patientId }, data: { hospitalizationRiskScore: hosp.score } });
+
   return assessment;
 }
 
@@ -119,6 +126,11 @@ export async function recordCaregiverLog(params: {
       status: "OPEN",
     },
   });
+
+  // A new CAREGIVER_BURDEN alert changes the hospitalization model's
+  // caregiverBurdenFlag7d feature — recompute so the dashboard reflects it.
+  const hosp = await computeHospitalizationRisk(params.patientId);
+  await prisma.patient.update({ where: { id: params.patientId }, data: { hospitalizationRiskScore: hosp.score } });
 
   return { burdenFlagged: true };
 }
