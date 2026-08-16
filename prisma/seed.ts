@@ -32,6 +32,7 @@ async function main() {
         cancerType: p.cancerType,
         chemoCycle: p.chemoCycle,
         parish: p.parish,
+        preferredLanguage: p.preferredLanguage ?? "en",
       },
     });
 
