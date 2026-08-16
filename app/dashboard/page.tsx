@@ -77,5 +77,5 @@ export default async function DashboardPage() {
     };
   });
 
-  return <DashboardClient patients={dashboardPatients} />;
+  return <DashboardClient patients={dashboardPatients} demoModeEnabled={process.env.DEMO_MODE === "true"} />;
 }
