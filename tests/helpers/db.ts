@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 
 export async function resetDb() {
   await prisma.riskAlert.deleteMany();
+  await prisma.soapNote.deleteMany();
   await prisma.symptomLog.deleteMany();
   await prisma.caregiverLog.deleteMany();
   await prisma.caregiver.deleteMany();
