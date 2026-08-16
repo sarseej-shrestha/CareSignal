@@ -12,6 +12,7 @@ import { DemoControls } from "@/components/DemoControls";
 import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
 import { SdohActionCard } from "@/components/SdohActionCard";
 import { SoapNoteGenerator } from "@/components/SoapNoteGenerator";
+import { FhirExportButton } from "@/components/FhirExportButton";
 import { sortByRiskPriority } from "@/lib/sortPatients";
 
 export interface CaregiverLogView {
@@ -165,6 +166,8 @@ export function DashboardClient({
             )}
 
             <SoapNoteGenerator patientId={selected.id} />
+
+            <FhirExportButton patientId={selected.id} patientMrn={selected.mrn} />
 
             <SymptomTrendChart data={selected.logs} />
 

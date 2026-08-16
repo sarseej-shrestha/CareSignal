@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 export interface QueuePatient {
   id: string;
+  mrn: string;
   firstName: string;
   lastName: string;
   parish: string;
