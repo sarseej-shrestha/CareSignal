@@ -1,6 +1,6 @@
 # CareSignal
 
-SMS-first remote symptom monitoring for cancer patients undergoing chemotherapy, with a parallel caregiver-reporting channel. Daily check-ins (structured or freeform text, in English or French) feed a two-layer risk engine — interpretable clinical rules plus a trained classifier — that flags escalating symptoms to a nurse triage dashboard. A separate model forecasts 7-day hospitalization risk. Caregiver burden is tracked as its own first-class signal, separate from patient clinical risk, not folded into it.
+SMS-first remote symptom monitoring for cancer patients undergoing chemotherapy, with a parallel caregiver-reporting channel. Daily check-ins (structured or freeform text, in English, French, or Spanish) feed a two-layer risk engine — interpretable clinical rules plus a trained classifier — that flags escalating symptoms to a nurse triage dashboard. A separate model forecasts 7-day hospitalization risk. Caregiver burden is tracked as its own first-class signal, separate from patient clinical risk, not folded into it.
 
 Built for the Ochsner Health / ASCO healthcare hackathon, grounded in Terrebonne and Lafourche Parish, Louisiana.
 
@@ -9,7 +9,7 @@ Built for the Ochsner Health / ASCO healthcare hackathon, grounded in Terrebonne
 - **Framework:** Next.js 16 (App Router, TypeScript, Tailwind v4, shadcn/ui)
 - **Database:** SQLite via Prisma ORM
 - **SMS:** Twilio SMS API + webhooks
-- **AI:** Groq (`openai/gpt-oss-120b`, OpenAI-compatible API) for freeform SMS/note-generation, handling English and French input
+- **AI:** Groq (`openai/gpt-oss-120b`, OpenAI-compatible API) for freeform SMS/note-generation, handling English, French, and Spanish input
 - **ML:** Two hand-trained logistic regression models (no external ML library) — a daily symptom-risk classifier and a separate 7-day hospitalization-risk forecaster — both trained on simulated data; see `docs/model-calibration.md`
 - **Charts:** Recharts
 - **Testing:** Vitest (unit + integration against a dedicated test DB) plus a custom load/concurrency test

@@ -50,7 +50,7 @@ export interface SeedPatient {
   cancerType: string;
   chemoCycle: string;
   parish: string;
-  preferredLanguage?: "en" | "fr";
+  preferredLanguage?: "en" | "fr" | "es";
   logs: SeedSymptomDay[];
   caregiver?: {
     firstName: string;
@@ -300,6 +300,38 @@ export const patients: SeedPatient[] = [
         fatigue: 6,
         fever: 98.6,
         rawSmsText: "Je me sens assez fatigué aujourd'hui, un peu de nausée, mais pas de fièvre, heureusement.",
+        parsedByAi: true,
+      },
+    ],
+  },
+  {
+    // Spanish-speaking patient — Louisiana's largest non-English-speaking
+    // population is Spanish-speaking, not French-speaking, so this is the
+    // higher-reach language addition. Last entry is real freeform Spanish
+    // text (not a translated placeholder), and this timeline trends toward
+    // YELLOW so the freeform path is demoed against a clinically meaningful
+    // case, not just a stable one.
+    mrn: "OCH-70149",
+    firstName: "Sofía",
+    lastName: "Reyes",
+    phone: "+19855550149",
+    cancerType: "Colon cancer",
+    chemoCycle: "Cycle 4 of 6",
+    parish: "Terrebonne",
+    preferredLanguage: "es",
+    logs: [
+      { daysAgo: 5, pain: 2, nausea: 2, fatigue: 3, fever: 98.4, rawSmsText: "2,2,3,98.4" },
+      { daysAgo: 4, pain: 2, nausea: 3, fatigue: 3, fever: 98.3, rawSmsText: "2,3,3,98.3" },
+      { daysAgo: 3, pain: 3, nausea: 3, fatigue: 4, fever: 98.5, rawSmsText: "3,3,4,98.5" },
+      { daysAgo: 2, pain: 3, nausea: 4, fatigue: 4, fever: 98.4, rawSmsText: "3,4,4,98.4" },
+      { daysAgo: 1, pain: 4, nausea: 4, fatigue: 5, fever: 98.6, rawSmsText: "4,4,5,98.6" },
+      {
+        daysAgo: 0,
+        pain: 4,
+        nausea: 6,
+        fatigue: 7,
+        fever: 98.7,
+        rawSmsText: "Hoy me siento bastante mal, tengo náuseas fuertes y mucho cansancio, pero no tengo fiebre.",
         parsedByAi: true,
       },
     ],
