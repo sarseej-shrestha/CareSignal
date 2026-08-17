@@ -17,5 +17,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     data: { status: "REVIEWED", reviewedAt: new Date() },
   });
 
-  return NextResponse.json({ ...updated, confidenceReasons: JSON.parse(updated.confidenceReasons) as string[] });
+  return NextResponse.json({
+    ...updated,
+    confidenceReasons: JSON.parse(updated.confidenceReasons) as string[],
+    sourceLogs: JSON.parse(updated.sourceLogs),
+  });
 }
