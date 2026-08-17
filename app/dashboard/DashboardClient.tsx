@@ -9,6 +9,7 @@ import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendCha
 import { RiskBadge } from "@/components/RiskBadge";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
+import { LimitationsPanel } from "@/components/LimitationsPanel";
 import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
 import { SdohActionCard } from "@/components/SdohActionCard";
 import type { TreatmentFrequency } from "@/lib/transportationResources";
@@ -79,6 +80,8 @@ export function DashboardClient({
           SMS-first symptom monitoring for rural Louisiana cancer care — Terrebonne &amp; Lafourche Parish
         </p>
       </header>
+
+      <LimitationsPanel />
 
       {demoModeEnabled && <DemoControls />}
 
