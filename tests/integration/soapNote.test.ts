@@ -62,6 +62,31 @@ describe("POST /api/ai/soap-note", () => {
     expect(stored.patientId).toBe(patient.id);
   });
 
+  it("persists provenance (sourceLogs) — the exact check-ins fed into generation, with date, source, and real numbers", async () => {
+    const patient = await seedTestPatient({ phone: "+19995553009" });
+    await prisma.symptomLog.create({
+      data: { patientId: patient.id, pain: 4, nausea: 3, fatigue: 5, fever: 99.1, source: "PATIENT_SMS" },
+    });
+    await prisma.symptomLog.create({
+      data: { patientId: patient.id, pain: 2, nausea: 1, fatigue: 2, fever: 98.4, source: "CAREGIVER_SMS" },
+    });
+    vi.mocked(generateSoapNote).mockResolvedValueOnce(fakeNote);
+
+    const res = await generatePOST(jsonRequest("http://localhost/api/ai/soap-note", { patientId: patient.id }));
+    const body = await res.json();
+
+    expect(body.sourceLogs).toHaveLength(2);
+    expect(body.sourceLogs.map((l: { source: string }) => l.source).sort()).toEqual(["CAREGIVER_SMS", "PATIENT_SMS"]);
+    expect(body.sourceLogs.every((l: { dateLabel: string }) => typeof l.dateLabel === "string" && l.dateLabel.length > 0)).toBe(true);
+    const patientLog = body.sourceLogs.find((l: { source: string }) => l.source === "PATIENT_SMS");
+    expect(patientLog).toMatchObject({ pain: 4, nausea: 3, fatigue: 5, fever: 99.1 });
+
+    // Also persisted, not just returned — a reviewed note (fetched later)
+    // must still carry the same provenance, not lose it.
+    const stored = await prisma.soapNote.findUniqueOrThrow({ where: { id: body.id } });
+    expect(JSON.parse(stored.sourceLogs)).toHaveLength(2);
+  });
+
   it("persists a note even for a patient with NO open alert — decoupled from RiskAlert lifecycle", async () => {
     const patient = await seedTestPatient({ phone: "+19995553002" });
     vi.mocked(generateSoapNote).mockResolvedValueOnce(fakeNote);
@@ -165,6 +190,7 @@ describe("POST /api/ai/soap-note/[id]/review", () => {
         fullText: "S: s\n\nO: o\n\nA: a\n\nP: p",
         confidenceLevel: "HIGH",
         confidenceReasons: "[]",
+        sourceLogs: "[]",
         status: "DRAFT",
       },
     });
@@ -178,6 +204,7 @@ describe("POST /api/ai/soap-note/[id]/review", () => {
     const body = await res.json();
     expect(body.status).toBe("REVIEWED");
     expect(body.reviewedAt).toBeTruthy();
+    expect(body.sourceLogs).toEqual([]); // provenance survives review, parsed back to an array not a raw JSON string
 
     const stored = await prisma.soapNote.findUniqueOrThrow({ where: { id: note.id } });
     expect(stored.status).toBe("REVIEWED");

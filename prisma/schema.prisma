@@ -97,6 +97,7 @@ model SoapNote {
   fullText          String
   confidenceLevel   String // "HIGH" | "LIMITED" — a deterministic heuristic (lib/soapNoteConfidence.ts), not the LLM self-assessing
   confidenceReasons String // JSON array of human-readable reasons for a LIMITED rating
+  sourceLogs        String // JSON array of the exact check-ins (id, dateLabel, source, pain, nausea, fatigue, fever) fed into generation, captured at generation time — not a live re-query, since the 7-day window could shift and no longer match what the LLM actually saw. Lets a nurse cross-check the note's claims against real source data in a few seconds — see components/SoapNoteGenerator.tsx.
   status            String    @default("DRAFT") // DRAFT | REVIEWED
   reviewedAt        DateTime?
   createdAt         DateTime  @default(now())
