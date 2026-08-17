@@ -62,8 +62,6 @@ export function DashboardClient({
 }) {
   const sortedQueue = useMemo(() => sortByConsolidatedPriority(patients), [patients]);
 
-  const burdenPatients = useMemo(() => patients.filter((p) => p.caregiverBurdenReasons), [patients]);
-
   const [selectedId, setSelectedId] = useState<string | null>(sortedQueue[0]?.id ?? null);
   const selected = patients.find((p) => p.id === selectedId) ?? null;
 
@@ -84,49 +82,15 @@ export function DashboardClient({
 
       {demoModeEnabled && <DemoControls />}
 
-      {burdenPatients.length > 0 && (
-        <Card className="border-[var(--viz-caregiver-burden)]/35 bg-[var(--viz-caregiver-burden)]/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base text-[var(--viz-caregiver-burden)]">
-              <HeartHandshake className="size-4" />
-              Caregiver burden alerts
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              A distinct signal from patient clinical risk — flagged from the caregiver&apos;s own check-in, not the patient&apos;s symptoms.
-            </p>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {burdenPatients.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSelectedId(p.id)}
-                className="flex flex-col gap-1 rounded-lg border border-[var(--viz-caregiver-burden)]/25 bg-background px-4 py-3 text-left transition hover:border-[var(--viz-caregiver-burden)]/50"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">
-                    {p.firstName} {p.lastName}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      caregiver: {p.caregiver?.firstName} {p.caregiver?.lastName} ({p.caregiver?.relationship})
-                    </span>
-                  </span>
-                  <RiskBadge level="CAREGIVER_BURDEN" />
-                </div>
-                <ul className="list-disc pl-5 text-xs text-muted-foreground">
-                  {p.caregiverBurdenReasons?.map((r) => <li key={r}>{r}</li>)}
-                </ul>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Consolidated triage queue</CardTitle>
+          <CardTitle className="text-base">Priority queue</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Daily clinical risk and 7-day hospitalization risk shown as ONE notification per patient — a
-            &quot;+ 7-day risk&quot; tag means both signals are elevated at once, not two separate items to review.
-            Click a row to see the full trend.
+            Each card pairs a patient&apos;s clinical status with their caregiver&apos;s status, when flagged — one
+            unified view, not two separate lists to cross-reference. The underlying scores stay completely separate
+            (see <code className="text-[11px]">docs/model-calibration.md</code>); this only changes how they&apos;re
+            shown together. A &quot;+ 7-day risk&quot; tag means the hospitalization forecast is also elevated.
+            Click a card to see the full trend.
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -151,22 +115,39 @@ export function DashboardClient({
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            {selected.reasons.length > 0 && (
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">Why this risk level</div>
-                <ul className="list-disc space-y-0.5 pl-5 text-sm">
-                  {selected.reasons.map((r) => (
-                    <li key={r}>{r}</li>
-                  ))}
-                </ul>
+            {/* The two "why" boxes, paired side by side — the same unified
+                pairing as the queue card above, carried into the detail
+                view. Clinical risk is rules-based and the most defensible
+                number this app produces, so it's visually primary (first,
+                same tier as caregiver burden — never blended into one
+                box or one score, just shown together). */}
+            {(selected.reasons.length > 0 || selected.caregiverBurdenReasons) && (
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {selected.reasons.length > 0 && (
+                  <div className="rounded-lg border bg-muted/30 p-3 sm:flex-1">
+                    <div className="mb-1.5 text-xs font-medium text-muted-foreground">Why this risk level</div>
+                    <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                      {selected.reasons.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {selected.caregiverBurdenReasons && (
+                  <div className="rounded-lg border border-[var(--viz-caregiver-burden)]/30 bg-[var(--viz-caregiver-burden)]/5 p-3 sm:flex-1">
+                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[var(--viz-caregiver-burden)]">
+                      <HeartHandshake className="size-3.5" />
+                      Why caregiver burden is flagged
+                    </div>
+                    <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                      {selected.caregiverBurdenReasons.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
-
-            <HospitalizationRiskPanel
-              score={selected.hospitalizationRiskScore}
-              factors={selected.hospitalizationRiskFactors}
-              hasRecentHistory={selected.hospitalizationHasRecentHistory}
-            />
 
             {/* No risk-level gate here on purpose — transportation burden comes
                 from how OFTEN a patient has to travel for treatment, not from
@@ -181,6 +162,17 @@ export function DashboardClient({
             <FhirExportButton patientId={selected.id} patientMrn={selected.mrn} />
 
             <SymptomTrendChart data={selected.logs} />
+
+            {/* Deliberately positioned AFTER the clinical content and trend
+                chart above, not right after the header — see
+                HospitalizationRiskPanel's own comment for why this is kept
+                secondary rather than competing with the clinical risk
+                reasons for first attention. */}
+            <HospitalizationRiskPanel
+              score={selected.hospitalizationRiskScore}
+              factors={selected.hospitalizationRiskFactors}
+              hasRecentHistory={selected.hospitalizationHasRecentHistory}
+            />
 
             <Separator />
 
