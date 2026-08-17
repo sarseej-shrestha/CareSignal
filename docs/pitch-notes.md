@@ -57,6 +57,8 @@ Live SMS through Twilio + Groq is the primary demo path — use it. This is only
 
 **Where:** a "Demo fallback (DEMO_MODE)" panel sits right below the header on `/dashboard`, with one button per scenario — but only if `.env` has `DEMO_MODE="true"` (it does by default for the hackathon build). Click a button, it triggers in ~1 second, dashboard updates automatically.
 
+**Fastest recovery — keyboard shortcut, no clicking:** press **Alt+1** / **Alt+2** / **Alt+3** anywhere on the dashboard page to instantly fire the scenario in that button position (Alt+1 = Michael Naquin/fever, Alt+2 = Denise Guidry/divergence, Alt+3 = Ruth Trahan/caregiver burden) — the exact combo is also printed right on each button, so it's discoverable on stage without needing to remember this doc. This exists specifically for the moment live SMS/AI drops mid-pitch: a keystroke, not hunting for and precisely clicking a small button while an audience is watching.
+
 **If the dashboard panel isn't visible or the browser is having its own issues**, run it from a terminal instead:
 ```
 cd ~/CareSignal
