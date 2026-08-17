@@ -52,6 +52,29 @@ export function DemoControls() {
     }
   }
 
+  // Fast keyboard trigger — Alt+1 / Alt+2 / Alt+3 fire the scenario in that
+  // list position immediately, no click required. The whole point: if
+  // live Twilio/Groq drops mid-demo, recovery should take a keystroke, not
+  // require finding and precisely clicking a small button on stage while
+  // an audience watches. Alt (not Cmd/Ctrl) specifically to avoid
+  // colliding with real browser shortcuts (Cmd+1..9 switches tabs in some
+  // browsers). Documented in docs/pitch-notes.md, and the exact
+  // combination is also shown right on each button below — discoverable
+  // without reading the docs mid-pitch.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!e.altKey || pendingId !== null) return;
+      const index = Number(e.key) - 1;
+      const scenario = scenarios[index];
+      if (Number.isInteger(index) && index >= 0 && scenario) {
+        e.preventDefault();
+        handleTrigger(scenario.id);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [scenarios, pendingId]);
+
   return (
     <Card className="border-dashed border-amber-500/40 bg-amber-500/5">
       <CardHeader>
@@ -61,22 +84,25 @@ export function DemoControls() {
         </CardTitle>
         <p className="text-xs text-muted-foreground">
           Break-glass only — replays a seeded scenario locally if live SMS/AI isn&apos;t available. Live SMS is the
-          primary demo path.
+          primary demo path. Click a button, or press the shortcut shown on it from anywhere on this page.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
-          {scenarios.map((s) => (
+          {scenarios.map((s, i) => (
             <Button
               key={s.id}
               size="sm"
               variant="outline"
               disabled={pendingId !== null}
               onClick={() => handleTrigger(s.id)}
-              title={s.description}
+              title={`${s.description} (Alt+${i + 1})`}
             >
               {pendingId === s.id ? <RotateCcw className="size-3.5 animate-spin" /> : null}
               {s.label}
+              <kbd className="ml-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] font-mono text-amber-700 dark:text-amber-400">
+                Alt+{i + 1}
+              </kbd>
             </Button>
           ))}
         </div>
