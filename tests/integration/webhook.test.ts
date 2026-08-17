@@ -39,7 +39,7 @@ describe("POST /api/twilio/inbound", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/xml");
     const xml = await res.text();
-    expect(xml).toContain("nurse from your care team"); // RED ack message
+    expect(xml).toContain("prompt medical attention"); // RED safety bounce-back
 
     const logs = await prisma.symptomLog.findMany({ where: { patientId: patient.id } });
     expect(logs).toHaveLength(1);
@@ -252,6 +252,76 @@ describe("POST /api/twilio/inbound", () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].parsedByAi).toBe(true); // proves it went through the AI path, not the structured one
     expect(logs[0].fever).toBeLessThan(110); // never the literal "999" from the raw text
+  });
+});
+
+// The RED safety bounce-back must fire from BOTH input paths — structured
+// and freeform-AI-parsed — because once symptom values are known (from
+// either path), the RED determination and this reply are 100% rules-engine
+// output (lib/risk.ts), with no further LLM step that could be skipped by
+// a timeout or error. These tests confirm that's actually true for both
+// paths, not just the structured one already covered above.
+describe("POST /api/twilio/inbound — RED safety bounce-back", () => {
+  afterEach(() => {
+    delete process.env.CLINIC_TRIAGE_PHONE;
+  });
+
+  it("fires on a structured RED input with the required safety content", async () => {
+    await seedTestPatient({ phone: "+19995551300" });
+    const res = await POST(formRequest({ From: "+19995551300", To: "+1900", Body: "7,7,8,101.5" }));
+    const xml = await res.text();
+
+    expect(xml).toContain("prompt medical attention");
+    expect(xml).toContain("911");
+    expect(xml).toContain("care team has also been notified");
+  });
+
+  it("fires on a freeform RED input (mocked AI parser) with the same required safety content", async () => {
+    await seedTestPatient({ phone: "+19995551301" });
+    vi.mocked(parsePatientSymptomText).mockResolvedValueOnce({
+      pain: 8,
+      nausea: 6,
+      fatigue: 7,
+      fever: 101.8,
+      feverMentioned: true,
+      summary: "severe pain and high fever",
+    });
+
+    const res = await POST(formRequest({ From: "+19995551301", To: "+1900", Body: "pain is really bad, 8 out of 10, and I have a fever" }));
+    const xml = await res.text();
+
+    expect(xml).toContain("prompt medical attention");
+    expect(xml).toContain("911");
+    expect(xml).toContain("care team has also been notified");
+  });
+
+  it("uses an obviously-fake placeholder when CLINIC_TRIAGE_PHONE isn't configured — never a plausible real number", async () => {
+    delete process.env.CLINIC_TRIAGE_PHONE;
+    await seedTestPatient({ phone: "+19995551302" });
+    const res = await POST(formRequest({ From: "+19995551302", To: "+1900", Body: "7,7,8,101.5" }));
+    const xml = await res.text();
+
+    expect(xml).toContain("[clinic phone not configured]");
+  });
+
+  it("uses the configured CLINIC_TRIAGE_PHONE value when set", async () => {
+    process.env.CLINIC_TRIAGE_PHONE = "(985) 555-0199";
+    await seedTestPatient({ phone: "+19995551303" });
+    const res = await POST(formRequest({ From: "+19995551303", To: "+1900", Body: "7,7,8,101.5" }));
+    const xml = await res.text();
+
+    expect(xml).toContain("(985) 555-0199");
+    expect(xml).not.toContain("[clinic phone not configured]");
+  });
+
+  it("also fires when a caregiver relays a RED-level structured report on the patient's behalf", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551304" });
+    await seedTestCaregiver(patient.id, { phone: "+19995551305" });
+    const res = await POST(formRequest({ From: "+19995551305", To: "+1900", Body: "7,7,8,101.5" }));
+    const xml = await res.text();
+
+    expect(xml).toContain("prompt medical attention");
+    expect(xml).toContain("911");
   });
 });
 

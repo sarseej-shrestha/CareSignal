@@ -22,10 +22,20 @@ export function normalizeLang(value: string | null | undefined): Lang {
 }
 
 const MESSAGES = {
+  // Deterministic safety bounce-back — fires immediately whenever the
+  // rules-based Layer 1 engine (lib/risk.ts) sets RED (fever >=100.4°F,
+  // severe pain/nausea >=8), from BOTH the structured and the freeform
+  // parsing paths (see riskAckMessage() in
+  // app/api/twilio/inbound/route.ts — once symptom values are known, from
+  // either path, the RED determination and this message are 100%
+  // rules-engine output, with no further LLM step that could be skipped by
+  // a timeout or error). {{clinicPhone}} is resolved from
+  // CLINIC_TRIAGE_PHONE (see .env.example) — never a real number
+  // hardcoded here.
   ackRed: {
-    en: "Thanks for the update. Based on what you shared, a nurse from your care team will call you shortly. If you're feeling very unwell, please don't wait — call your clinic or 911.",
-    fr: "Merci pour votre message. D'après ce que vous avez partagé, une infirmière de votre équipe de soins vous appellera bientôt. Si vous vous sentez très mal, n'attendez pas — appelez votre clinique ou le 911.",
-    es: "Gracias por su mensaje. Según lo que compartió, un enfermero o enfermera de su equipo de atención la llamará pronto. Si se siente muy mal, no espere — llame a su clínica o al 911.",
+    en: "This requires prompt medical attention. Please call {{clinicPhone}} now, or call 911 if this feels like an emergency. A member of your care team has also been notified.",
+    fr: "Cela nécessite une attention médicale rapide. Veuillez appeler le {{clinicPhone}} maintenant, ou le 911 en cas d'urgence. Un membre de votre équipe de soins a également été averti.",
+    es: "Esto requiere atención médica pronta. Por favor llame al {{clinicPhone}} ahora, o al 911 si esto se siente como una emergencia. También se ha notificado a un miembro de su equipo de atención.",
   },
   ackYellow: {
     en: "Thanks for the update — logged. Your care team is keeping an eye on your recent symptoms.",

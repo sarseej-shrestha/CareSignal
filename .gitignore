@@ -41,6 +41,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template — README.md points new setups at this file, so it
+# needs to actually be in the repo, not just on this machine. Contains no
+# real values, only empty-string placeholders and comments.
+!.env.example
 
 # vercel
 .vercel
