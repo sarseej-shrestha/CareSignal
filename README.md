@@ -58,3 +58,5 @@ The load test writes real numbers to `docs/load-test-results.md` and needs `npm 
 - [`docs/model-calibration.md`](docs/model-calibration.md) — training data, metrics, and validation plan for both risk models
 - [`docs/load-test-results.md`](docs/load-test-results.md) — concurrency/load test results, including a real concurrency bug found and fixed
 - [`docs/alert-volume-analysis.md`](docs/alert-volume-analysis.md) — computed nurse-triage notification volume estimates for a 50-100 patient panel
+- [`docs/fhir-validation-results.md`](docs/fhir-validation-results.md) — round-by-round FHIR export validation results against HL7's real reference validator
+- [`docs/known-behaviors.md`](docs/known-behaviors.md) — intentional-but-non-obvious behaviors found during manual testing, so they don't get mistaken for bugs
