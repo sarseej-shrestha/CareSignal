@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import { generateSoapNote } from "@/lib/ai";
 import { assessSoapNoteConfidence } from "@/lib/soapNoteConfidence";
 
+function formatDateLabel(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 // Generates a SOAP note from a patient's recent check-in history and active
 // alert reasons, and PERSISTS it as its own record — status "DRAFT" always,
 // with a deterministic confidence signal computed alongside it. There is no
@@ -49,6 +53,26 @@ export async function POST(req: NextRequest) {
     aiParsedLogCount: patient.symptomLogs.filter((l) => l.parsedByAi).length,
   });
 
+  // Provenance for the note — the EXACT check-ins fed into generation
+  // above, captured now rather than re-queried later, since the trailing
+  // 7-day window this route just read could shift by the time anyone
+  // views the note. Deterministic (built from the same data already
+  // fetched, not asked of the LLM), so a nurse can cross-check what the
+  // note's S/O sections claim against real source data in a few seconds —
+  // see components/SoapNoteGenerator.tsx.
+  const sourceLogs = patient.symptomLogs
+    .slice()
+    .reverse()
+    .map((l) => ({
+      id: l.id,
+      dateLabel: formatDateLabel(l.createdAt),
+      source: l.source,
+      pain: l.pain,
+      nausea: l.nausea,
+      fatigue: l.fatigue,
+      fever: l.fever,
+    }));
+
   try {
     const note = await generateSoapNote({
       patientName: `${patient.firstName} ${patient.lastName}`,
@@ -72,6 +96,7 @@ export async function POST(req: NextRequest) {
         fullText: note.fullText,
         confidenceLevel: confidence.level,
         confidenceReasons: JSON.stringify(confidence.reasons),
+        sourceLogs: JSON.stringify(sourceLogs),
         status: "DRAFT",
       },
     });
@@ -79,6 +104,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...saved,
       confidenceReasons: confidence.reasons,
+      sourceLogs,
     });
   } catch (err) {
     console.error("[soap-note] generation failed:", err);

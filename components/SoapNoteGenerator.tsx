@@ -4,6 +4,17 @@ import { useState } from "react";
 import { AlertTriangle, Check, Copy, FileText, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatSoapNoteForExport } from "@/lib/soapNoteFormat";
+import { SourceBadge, type LogSource } from "@/components/SourceBadge";
+
+interface SourceLogEntry {
+  id: string;
+  dateLabel: string;
+  source: LogSource;
+  pain: number;
+  nausea: number;
+  fatigue: number;
+  fever: number;
+}
 
 interface SoapNote {
   id: string;
@@ -14,6 +25,7 @@ interface SoapNote {
   fullText: string;
   confidenceLevel: "HIGH" | "LIMITED";
   confidenceReasons: string[];
+  sourceLogs: SourceLogEntry[];
   status: "DRAFT" | "REVIEWED";
   reviewedAt: string | null;
 }
@@ -153,6 +165,32 @@ export function SoapNoteGenerator({ patientId }: { patientId: string }) {
               <dd>{note.plan}</dd>
             </div>
           </dl>
+
+          {note.sourceLogs.length > 0 && (
+            // Verifiability, not a fancy diff: every S/O/A/P section above
+            // was generated from this SAME complete set of check-ins at
+            // once (not one log per sentence), so this deliberately doesn't
+            // claim a false per-sentence mapping — it's the real, complete
+            // evidence set, with actual numbers, so a nurse can cross-check
+            // a claim like "pain rose to 5/10" against the raw values here
+            // in a few seconds instead of trusting the prose on its own.
+            <div className="mt-3 rounded-md border border-dashed p-2.5">
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                Sourced from these check-ins — cross-check the note above against the raw values here
+              </p>
+              <ul className="flex flex-col gap-1">
+                {note.sourceLogs.map((log) => (
+                  <li key={log.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{log.dateLabel}</span>
+                    <SourceBadge source={log.source} />
+                    <span>
+                      Pain {log.pain}/10 · Nausea {log.nausea}/10 · Fatigue {log.fatigue}/10 · Fever {log.fever.toFixed(1)}°F
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
 
