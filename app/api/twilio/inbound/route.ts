@@ -21,8 +21,19 @@ function twiml(message: string): NextResponse {
   });
 }
 
+// Never a real number hardcoded in source — resolved from CLINIC_TRIAGE_PHONE
+// (see .env.example) at send time. Left unset, this placeholder is
+// deliberately obvious rather than a plausible-looking fake number someone
+// could mistake for a real triage line and actually call.
+const UNCONFIGURED_CLINIC_PHONE_PLACEHOLDER = "[clinic phone not configured]";
+
+function clinicTriagePhone(): string {
+  const configured = process.env.CLINIC_TRIAGE_PHONE?.trim();
+  return configured || UNCONFIGURED_CLINIC_PHONE_PLACEHOLDER;
+}
+
 function riskAckMessage(assessment: RiskAssessment, lang: Lang): string {
-  if (assessment.level === "RED") return t("ackRed", lang);
+  if (assessment.level === "RED") return t("ackRed", lang, { clinicPhone: clinicTriagePhone() });
   if (assessment.level === "YELLOW") return t("ackYellow", lang);
   return t("ackGreen", lang);
 }
