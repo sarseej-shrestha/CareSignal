@@ -3,6 +3,49 @@ import { prisma } from "@/lib/db";
 import { buildFhirBundle } from "@/lib/fhirExport";
 import { resetDb, seedTestPatient, seedTestCaregiver } from "../helpers/db";
 
+// FHIR resources are heterogeneous JSON, and lib/fhirExport.ts deliberately
+// builds them as untyped inline object literals rather than a full FHIR type
+// surface. These interfaces capture only the fields these tests actually
+// assert on, not the FHIR spec.
+interface FhirResource {
+  resourceType: string;
+  id: string;
+  [key: string]: unknown;
+}
+
+interface FhirEntry {
+  fullUrl: string;
+  resource: FhirResource;
+}
+
+interface FhirCoding {
+  system: string;
+  code: string;
+}
+
+interface FhirObservation extends FhirResource {
+  code: { coding: FhirCoding[] };
+  valueQuantity: { value: number; unit: string };
+}
+
+interface FhirRiskAssessment extends FhirResource {
+  prediction: { probabilityDecimal?: number; rationale?: string; outcome?: { text: string } }[];
+}
+
+interface FhirPatientResource extends FhirResource {
+  identifier: { system: string; value: string }[];
+  name: { family: string }[];
+  communication: { language: { coding: { code: string }[] } }[];
+}
+
+interface FhirCondition extends FhirResource {
+  code: { text: string };
+}
+
+interface FhirFlag extends FhirResource {
+  code: { text: string };
+}
+
 beforeEach(resetDb);
 afterEach(resetDb);
 
@@ -20,16 +63,16 @@ describe("buildFhirBundle", () => {
     // Patient + Condition + the always-present hospitalization RiskAssessment
     // (score 0, since there's no history to elevate it) — nothing else, since
     // there's genuinely nothing else to report yet.
-    const resources = bundle!.entry.map((e) => e.resource);
-    expect(resources.map((r: any) => r.resourceType).sort()).toEqual(["Condition", "Patient", "RiskAssessment"]);
-    expect(resources.filter((r: any) => r.resourceType === "Observation")).toHaveLength(0);
-    expect(resources.filter((r: any) => r.resourceType === "Flag")).toHaveLength(0);
+    const resources = (bundle!.entry as FhirEntry[]).map((e) => e.resource);
+    expect(resources.map((r) => r.resourceType).sort()).toEqual(["Condition", "Patient", "RiskAssessment"]);
+    expect(resources.filter((r) => r.resourceType === "Observation")).toHaveLength(0);
+    expect(resources.filter((r) => r.resourceType === "Flag")).toHaveLength(0);
 
-    const hospRisk = resources.find((r: any) => r.id.startsWith("hosp-risk-")) as any;
+    const hospRisk = resources.find((r) => r.id.startsWith("hosp-risk-")) as FhirRiskAssessment;
     expect(hospRisk.prediction[0].probabilityDecimal).toBe(0);
 
     // Every entry still has a valid fullUrl even in this minimal case.
-    for (const entry of bundle!.entry as any[]) {
+    for (const entry of bundle!.entry as FhirEntry[]) {
       expect(entry.fullUrl).toMatch(/^urn:uuid:/);
     }
   });
@@ -38,7 +81,9 @@ describe("buildFhirBundle", () => {
     const patient = await seedTestPatient({ preferredLanguage: "not-a-real-language-code" });
     const bundle = await buildFhirBundle(patient.id);
 
-    const patientResource = bundle!.entry.map((e) => e.resource).find((r: any) => r.resourceType === "Patient") as any;
+    const patientResource = (bundle!.entry as FhirEntry[])
+      .map((e) => e.resource)
+      .find((r) => r.resourceType === "Patient") as FhirPatientResource;
     expect(patientResource.communication[0].language.coding[0].code).toBe("en");
   });
 
@@ -46,9 +91,9 @@ describe("buildFhirBundle", () => {
     const patient = await seedTestPatient({ mrn: "MRN-1", firstName: "Ada", lastName: "Lovelace", cancerType: "Leukemia" });
     const bundle = await buildFhirBundle(patient.id);
 
-    const resources = bundle!.entry.map((e) => e.resource);
-    const patientResource = resources.find((r: any) => r.resourceType === "Patient") as any;
-    const conditionResource = resources.find((r: any) => r.resourceType === "Condition") as any;
+    const resources = (bundle!.entry as FhirEntry[]).map((e) => e.resource);
+    const patientResource = resources.find((r) => r.resourceType === "Patient") as FhirPatientResource;
+    const conditionResource = resources.find((r) => r.resourceType === "Condition") as FhirCondition;
 
     expect(patientResource.id).toBe(patient.id);
     expect(patientResource.identifier[0]).toEqual({ system: "http://caresignal.example/mrn", value: "MRN-1" });
@@ -63,20 +108,22 @@ describe("buildFhirBundle", () => {
     });
 
     const bundle = await buildFhirBundle(patient.id);
-    const observations = bundle!.entry.map((e) => e.resource).filter((r: any) => r.resourceType === "Observation") as any[];
+    const observations = (bundle!.entry as FhirEntry[])
+      .map((e) => e.resource)
+      .filter((r) => r.resourceType === "Observation") as FhirObservation[];
 
     expect(observations).toHaveLength(4); // pain, nausea, fatigue, temperature
 
-    const pain = observations.find((o) => o.code.coding[0].code === "72514-3");
+    const pain = observations.find((o) => o.code.coding[0].code === "72514-3")!;
     expect(pain.code.coding[0].system).toBe("http://loinc.org");
     expect(pain.valueQuantity.value).toBe(5);
 
-    const temp = observations.find((o) => o.code.coding[0].code === "8310-5");
+    const temp = observations.find((o) => o.code.coding[0].code === "8310-5")!;
     expect(temp.valueQuantity.value).toBe(99.1);
     expect(temp.valueQuantity.unit).toBe("degF");
 
     // Nausea has no verified matching LOINC code — must use the explicit local code, not a guessed LOINC number.
-    const nausea = observations.find((o) => o.valueQuantity.value === 3);
+    const nausea = observations.find((o) => o.valueQuantity.value === 3)!;
     expect(nausea.code.coding[0].system).toBe("http://caresignal.example/local-codes");
   });
 
@@ -88,7 +135,7 @@ describe("buildFhirBundle", () => {
       });
     }
     const bundle = await buildFhirBundle(patient.id);
-    const observations = bundle!.entry.map((e) => e.resource).filter((r: any) => r.resourceType === "Observation");
+    const observations = (bundle!.entry as FhirEntry[]).map((e) => e.resource).filter((r) => r.resourceType === "Observation");
     expect(observations).toHaveLength(7 * 4); // 7 logs x 4 symptoms each
   });
 
@@ -103,16 +150,18 @@ describe("buildFhirBundle", () => {
     });
 
     const bundle = await buildFhirBundle(patient.id);
-    const riskAssessments = bundle!.entry.map((e) => e.resource).filter((r: any) => r.resourceType === "RiskAssessment") as any[];
+    const riskAssessments = (bundle!.entry as FhirEntry[])
+      .map((e) => e.resource)
+      .filter((r) => r.resourceType === "RiskAssessment") as FhirRiskAssessment[];
 
     // 1 for the open clinical alert + 1 for the hospitalization forecast (always present, separate model).
     expect(riskAssessments).toHaveLength(2);
-    const dailyRisk = riskAssessments.find((r) => r.id.startsWith("riskassessment-"));
+    const dailyRisk = riskAssessments.find((r) => r.id.startsWith("riskassessment-"))!;
     expect(dailyRisk.prediction[0].rationale).toBe("Fever 101°F");
     expect(dailyRisk.prediction[0].probabilityDecimal).toBe(0.9);
 
-    const hospRisk = riskAssessments.find((r) => r.id.startsWith("hosp-risk-"));
-    expect(hospRisk.prediction[0].outcome.text).toBe("Hospitalization within 7 days");
+    const hospRisk = riskAssessments.find((r) => r.id.startsWith("hosp-risk-"))!;
+    expect(hospRisk.prediction[0].outcome!.text).toBe("Hospitalization within 7 days");
     expect(hospRisk.id.length).toBeLessThanOrEqual(64); // FHIR resource id limit — this one was 68 chars before the fix
   });
 
@@ -121,14 +170,14 @@ describe("buildFhirBundle", () => {
     await seedTestCaregiver(patient.id);
 
     const withoutBurden = await buildFhirBundle(patient.id);
-    expect(withoutBurden!.entry.some((e: any) => e.resource.resourceType === "Flag")).toBe(false);
+    expect((withoutBurden!.entry as FhirEntry[]).some((e) => e.resource.resourceType === "Flag")).toBe(false);
 
     await prisma.riskAlert.create({
       data: { patientId: patient.id, level: "CAREGIVER_BURDEN", reasons: JSON.stringify(["Coping score 1/5"]), status: "OPEN" },
     });
 
     const withBurden = await buildFhirBundle(patient.id);
-    const flag = withBurden!.entry.map((e) => e.resource).find((r: any) => r.resourceType === "Flag") as any;
+    const flag = (withBurden!.entry as FhirEntry[]).map((e) => e.resource).find((r) => r.resourceType === "Flag") as FhirFlag;
     expect(flag).toBeDefined();
     expect(flag.code.text).toContain("Coping score 1/5");
   });
@@ -143,11 +192,11 @@ describe("buildFhirBundle", () => {
     });
 
     const bundle = await buildFhirBundle(patient.id);
-    const fullUrls = new Set(bundle!.entry.map((e: any) => e.fullUrl));
+    const fullUrls = new Set((bundle!.entry as FhirEntry[]).map((e) => e.fullUrl));
 
-    for (const entry of bundle!.entry as any[]) {
+    for (const entry of bundle!.entry as FhirEntry[]) {
       expect(entry.fullUrl).toBeTruthy();
-      const subjectRef = entry.resource.subject?.reference;
+      const subjectRef = (entry.resource.subject as { reference?: string } | undefined)?.reference;
       if (subjectRef) expect(fullUrls.has(subjectRef)).toBe(true);
     }
   });

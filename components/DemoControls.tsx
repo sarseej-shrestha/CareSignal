@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,26 +31,29 @@ export function DemoControls() {
       .catch(() => setError("Couldn't load demo scenarios."));
   }, []);
 
-  async function handleTrigger(id: string) {
-    setPendingId(id);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/demo/trigger", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenarioId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Trigger failed.");
-      setMessage(`${data.patientName}: ${data.summary}`);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Trigger failed.");
-    } finally {
-      setPendingId(null);
-    }
-  }
+  const handleTrigger = useCallback(
+    async (id: string) => {
+      setPendingId(id);
+      setError(null);
+      setMessage(null);
+      try {
+        const res = await fetch("/api/demo/trigger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenarioId: id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Trigger failed.");
+        setMessage(`${data.patientName}: ${data.summary}`);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Trigger failed.");
+      } finally {
+        setPendingId(null);
+      }
+    },
+    [router]
+  );
 
   // Fast keyboard trigger — Alt+1 / Alt+2 / Alt+3 fire the scenario in that
   // list position immediately, no click required. The whole point: if
@@ -73,7 +76,7 @@ export function DemoControls() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [scenarios, pendingId]);
+  }, [scenarios, pendingId, handleTrigger]);
 
   return (
     <Card className="border-dashed border-amber-500/40 bg-amber-500/5">

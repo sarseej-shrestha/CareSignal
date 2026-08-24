@@ -190,7 +190,7 @@ function trainLogisticRegression(
   l2: number
 ) {
   const nFeatures = dataset[0].features.length;
-  let weights = new Array(nFeatures).fill(0);
+  const weights = new Array(nFeatures).fill(0);
   let bias = 0;
   const n = dataset.length;
 
