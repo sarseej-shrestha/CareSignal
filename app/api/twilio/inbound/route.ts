@@ -12,6 +12,27 @@ import {
 import type { RiskAssessment } from "@/lib/risk";
 import { normalizeLang, t, type Lang } from "@/lib/i18n";
 
+// Twilio computes its request signature against the exact public URL it
+// POSTed to (the webhook URL configured in the Twilio console) — https,
+// public host, path, and query string. `req.url` reflects the request as
+// Next.js's own server sees it, which behind a reverse proxy (ngrok
+// locally, Railway's own proxy in production) is NOT the same string: it
+// keeps the app's own bind host (e.g. "localhost:3000") even when it does
+// pick up "https" from X-Forwarded-Proto. Signing against a different URL
+// than Twilio used makes validateRequest() fail deterministically for
+// every legitimate request, not just an edge case — this reconstructs the
+// actual public URL from the standard forwarding headers every proxy in
+// front of this app sets. This doesn't weaken validation: an attacker
+// still can't produce a valid X-Twilio-Signature for a URL of their
+// choosing without the real auth token, so trusting these headers here
+// only fixes what URL is being validated against, not whether the
+// signature itself is checked.
+function publicRequestUrl(req: NextRequest): string {
+  const proto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+  return `${proto}://${host}${req.nextUrl.pathname}${req.nextUrl.search}`;
+}
+
 function twiml(message: string): NextResponse {
   const response = new twilio.twiml.MessagingResponse();
   response.message(message);
@@ -199,7 +220,7 @@ export async function POST(req: NextRequest) {
     formData.forEach((value, key) => {
       params[key] = String(value);
     });
-    const valid = twilio.validateRequest(authToken, signature, req.url, params);
+    const valid = twilio.validateRequest(authToken, signature, publicRequestUrl(req), params);
     if (!valid) {
       return NextResponse.json({ error: "Invalid Twilio signature." }, { status: 403 });
     }
