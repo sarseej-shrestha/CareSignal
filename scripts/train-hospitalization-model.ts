@@ -22,7 +22,6 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 import { HOSP_FEATURE_NAMES, toFeatureVector, type HospitalizationInputs } from "../lib/hospitalizationFeatures";
 import { assessRisk } from "../lib/risk";
-import { predictRiskProbability } from "../lib/riskModel";
 import type { DailySymptoms } from "../lib/riskEngine";
 import { simulateIndependentTimeline } from "../lib/independentPatientSimulator";
 
