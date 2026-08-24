@@ -398,10 +398,10 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
               assist, and a second signal most tools never look for.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button size="lg" render={<Link href={`/dashboard?patient=${result.patientId}`} />}>
+              <Button size="lg" render={<Link href={`/dashboard?patient=${result.patientId}`} />} nativeButton={false}>
                 Open the full dashboard
               </Button>
-              <Button variant="outline" render={<Link href="/" />}>
+              <Button variant="outline" render={<Link href="/" />} nativeButton={false}>
                 Back to CareSignal
               </Button>
             </div>

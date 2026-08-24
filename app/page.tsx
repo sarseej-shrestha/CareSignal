@@ -78,7 +78,7 @@ export default function LandingPage() {
             smartphone required.
           </p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button size="lg" render={<Link href="/demo" />} className="px-6 text-base">
+            <Button size="lg" render={<Link href="/demo" />} nativeButton={false} className="px-6 text-base">
               Try the live demo
             </Button>
             <a
@@ -151,7 +151,7 @@ export default function LandingPage() {
             Not clinically validated against real patient outcomes. Built and trained on simulated data. Does not
             diagnose or replace a clinician&apos;s judgment.
           </p>
-          <Button render={<Link href="/demo" />}>Try the live demo</Button>
+          <Button render={<Link href="/demo" />} nativeButton={false}>Try the live demo</Button>
         </div>
       </footer>
     </div>
