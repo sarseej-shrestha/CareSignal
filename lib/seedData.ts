@@ -24,7 +24,7 @@ export function daysAgo(n: number, hour = 8): Date {
   return d > now ? now : d;
 }
 
-export interface SeedSymptomDay {
+interface SeedSymptomDay {
   daysAgo: number;
   pain: number;
   nausea: number;

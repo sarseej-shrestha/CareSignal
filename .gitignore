@@ -54,3 +54,9 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# locally-installed agent skill packages (e.g. `npx skills add ...`) — local
+# tooling, not application code; not committed by design
+/.agents/
+/.claude/skills/
+/skills-lock.json

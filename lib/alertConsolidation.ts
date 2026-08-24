@@ -67,7 +67,7 @@ export function consolidateNotification(patient: {
   };
 }
 
-export interface ConsolidatableSortable {
+interface ConsolidatableSortable {
   riskStatus: RiskLevel;
   riskScore: number;
   hospitalizationRiskScore: number;

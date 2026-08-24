@@ -22,7 +22,6 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 import { HOSP_FEATURE_NAMES, toFeatureVector, type HospitalizationInputs } from "../lib/hospitalizationFeatures";
 import { assessRisk } from "../lib/risk";
-import { predictRiskProbability } from "../lib/riskModel";
 import type { DailySymptoms } from "../lib/riskEngine";
 import { simulateIndependentTimeline } from "../lib/independentPatientSimulator";
 
@@ -134,7 +133,7 @@ function sigmoid(z: number): number {
 
 function trainLogisticRegression(dataset: TrainingExample[], epochs: number, lr: number, l2: number) {
   const nFeatures = dataset[0].features.length;
-  let weights = new Array(nFeatures).fill(0);
+  const weights = new Array(nFeatures).fill(0);
   let bias = 0;
   const n = dataset.length;
 
