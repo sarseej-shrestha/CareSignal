@@ -152,10 +152,15 @@
   }
   html {
     @apply font-sans;
-    scroll-behavior: smooth;
   }
   h1, h2, h3 {
     text-wrap: balance;
     letter-spacing: -0.02em;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
   }
 }

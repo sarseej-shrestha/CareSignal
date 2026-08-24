@@ -71,7 +71,7 @@ export function DashboardClient({
       <header className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Activity className="size-4.5" />
+            <Activity className="size-4.5" aria-hidden="true" />
           </span>
           <h1 className="text-[1.6rem] font-semibold tracking-tight">CareSignal</h1>
           <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">

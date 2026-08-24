@@ -40,8 +40,8 @@ export function HospitalizationRiskPanel({
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-[var(--viz-series-fever)] transition-[width] duration-300"
-          style={{ width: `${pct}%` }}
+          className="h-full w-full origin-left rounded-full bg-[var(--viz-series-fever)] transition-transform duration-300"
+          style={{ transform: `scaleX(${pct / 100})` }}
         />
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
