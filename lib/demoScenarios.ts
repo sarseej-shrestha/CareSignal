@@ -199,6 +199,7 @@ export interface ScenarioResult {
   caregiverBurdenReasons?: string[];
   hospitalizationRiskScore?: number;
   hospitalizationRiskFactors?: string[];
+  hospitalizationHasRecentHistory?: boolean;
 }
 
 export async function triggerScenario(scenarioId: string): Promise<ScenarioResult> {
@@ -255,6 +256,7 @@ export async function triggerScenario(scenarioId: string): Promise<ScenarioResul
         caregiverBurdenReasons: burdenAlert ? (JSON.parse(burdenAlert.reasons) as string[]) : undefined,
         hospitalizationRiskScore: hosp.score,
         hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
+        hospitalizationHasRecentHistory: hosp.hasRecentHistory,
       };
     }
     default:
