@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { computeHospitalizationRisk, hospitalizationFactors } from "@/lib/hospitalizationRisk";
 import { DashboardClient, type DashboardPatient } from "./DashboardClient";
+
+export const metadata: Metadata = {
+  title: "Nurse triage dashboard — CareSignal",
+  description: "SMS-first remote symptom monitoring for rural Louisiana cancer care.",
+};
 
 export const dynamic = "force-dynamic";
 
