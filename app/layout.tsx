@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CareSignal — Nurse Triage Dashboard",
-  description: "SMS-first remote symptom monitoring for rural Louisiana cancer care.",
+  title: "CareSignal — Catch problems before they become emergencies",
+  description: "SMS-first remote symptom monitoring for rural Louisiana cancer care, with a separate caregiver-burden signal.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
