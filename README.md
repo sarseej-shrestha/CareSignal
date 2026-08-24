@@ -2,7 +2,20 @@
 
 **Catch problems before they become emergencies.**
 
-### [Try the live demo](https://sarseej-shrestha.github.io/CareSignal/)
+<p align="center">
+  <a href="https://youtu.be/3j3FcKFaYHc">
+    <img src="https://img.shields.io/badge/▶%20Watch%20Demo-YouTube-red?style=for-the-badge" alt="Watch Demo">
+  </a>
+  <a href="https://sarseej-shrestha.github.io/CareSignal/">
+    <img src="https://img.shields.io/badge/🚀%20Try%20Live%20Demo-00A896?style=for-the-badge" alt="Try Live Demo">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/3j3FcKFaYHc">
+    <img src="https://img.youtube.com/vi/3j3FcKFaYHc/maxresdefault.jpg" alt="Watch the CareSignal Demo" width="500">
+  </a>
+</p>
 
 A text message tells a nurse when a chemo patient, or the person taking care of them, needs help before either of them has to call in. No app. No login. No smartphone required. Just a phone number.
 
