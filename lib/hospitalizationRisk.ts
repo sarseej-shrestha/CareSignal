@@ -76,3 +76,21 @@ export async function computeHospitalizationRisk(patientId: string): Promise<Hos
 
   return { score: predictHospitalizationRisk(inputs), inputs, hasRecentHistory: windowLogs.length > 0 };
 }
+
+// Human-readable contributing factors for the hospitalization-risk panel —
+// recomputed from the live inputs (not read back from the stored score) so
+// the "why" always matches what actually went into the model. Thresholds are
+// descriptive, not clinical cutoffs — see docs/model-calibration.md for the
+// trained feature weights. Shared by app/dashboard/page.tsx and
+// lib/demoScenarios.ts so the /demo walkthrough shows the same real factors
+// a nurse would see on the dashboard.
+export function hospitalizationFactors(inputs: HospitalizationInputs): string[] {
+  const factors: string[] = [];
+  if (inputs.caregiverBurdenFlag7d === 1) factors.push("Caregiver burden alert in the past 7 days");
+  if (inputs.alertCount7d >= 2) factors.push(`${inputs.alertCount7d} clinical alerts in the past 7 days`);
+  if (inputs.feverRecurrenceCount7d >= 1) factors.push(`Fever recurrence on ${inputs.feverRecurrenceCount7d} day(s)`);
+  if (inputs.severeDayCount7d >= 2) factors.push(`${inputs.severeDayCount7d} days of near-severe symptoms`);
+  if (inputs.maxTrendDelta7d >= 3) factors.push("A sharp single-day symptom escalation this week");
+  if (inputs.avgDailyModelProb7d >= 0.3) factors.push("Sustained elevated daily risk across the week");
+  return factors;
+}

@@ -57,13 +57,19 @@ export interface DashboardPatient extends QueuePatient {
 export function DashboardClient({
   patients,
   demoModeEnabled,
+  initialSelectedId = null,
 }: {
   patients: DashboardPatient[];
   demoModeEnabled: boolean;
+  initialSelectedId?: string | null;
 }) {
   const sortedQueue = useMemo(() => sortByConsolidatedPriority(patients), [patients]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(sortedQueue[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    (initialSelectedId && patients.some((p) => p.id === initialSelectedId) ? initialSelectedId : null) ??
+      sortedQueue[0]?.id ??
+      null
+  );
   const selected = patients.find((p) => p.id === selectedId) ?? null;
 
   return (

@@ -1,23 +1,6 @@
 import { prisma } from "@/lib/db";
-import { computeHospitalizationRisk } from "@/lib/hospitalizationRisk";
-import type { HospitalizationInputs } from "@/lib/hospitalizationFeatures";
+import { computeHospitalizationRisk, hospitalizationFactors } from "@/lib/hospitalizationRisk";
 import { DashboardClient, type DashboardPatient } from "./DashboardClient";
-
-// Human-readable contributing factors for the hospitalization-risk panel —
-// recomputed here (not read back from the stored score) so the "why" always
-// matches the live inputs, same spirit as RiskBadge's reasons list but for
-// a different model/question. Thresholds are descriptive, not clinical
-// cutoffs — see docs/model-calibration.md for the trained feature weights.
-function hospitalizationFactors(inputs: HospitalizationInputs): string[] {
-  const factors: string[] = [];
-  if (inputs.caregiverBurdenFlag7d === 1) factors.push("Caregiver burden alert in the past 7 days");
-  if (inputs.alertCount7d >= 2) factors.push(`${inputs.alertCount7d} clinical alerts in the past 7 days`);
-  if (inputs.feverRecurrenceCount7d >= 1) factors.push(`Fever recurrence on ${inputs.feverRecurrenceCount7d} day(s)`);
-  if (inputs.severeDayCount7d >= 2) factors.push(`${inputs.severeDayCount7d} days of near-severe symptoms`);
-  if (inputs.maxTrendDelta7d >= 3) factors.push("A sharp single-day symptom escalation this week");
-  if (inputs.avgDailyModelProb7d >= 0.3) factors.push("Sustained elevated daily risk across the week");
-  return factors;
-}
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +8,12 @@ function formatDateLabel(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ patient?: string }>;
+}) {
+  const { patient: initialSelectedId } = await searchParams;
   const patients = await prisma.patient.findMany({
     include: {
       symptomLogs: { orderBy: { createdAt: "asc" } },
@@ -103,5 +91,11 @@ export default async function DashboardPage() {
     };
   });
 
-  return <DashboardClient patients={dashboardPatients} demoModeEnabled={process.env.DEMO_MODE === "true"} />;
+  return (
+    <DashboardClient
+      patients={dashboardPatients}
+      demoModeEnabled={process.env.DEMO_MODE === "true"}
+      initialSelectedId={initialSelectedId ?? null}
+    />
+  );
 }
