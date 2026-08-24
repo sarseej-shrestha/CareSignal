@@ -53,7 +53,7 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-export interface IndependentSimDay {
+interface IndependentSimDay {
   pain: number;
   nausea: number;
   fatigue: number;
@@ -61,7 +61,7 @@ export interface IndependentSimDay {
   copingScore: number; // 1-5, hidden ground truth observed with noise
 }
 
-export interface IndependentPatientTimeline {
+interface IndependentPatientTimeline {
   days: IndependentSimDay[];
   /** Index (0-based) of the day hospitalization occurred, or null if it never did within the simulated window. */
   hospitalizedOnsetDay: number | null;
