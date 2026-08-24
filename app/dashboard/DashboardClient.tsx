@@ -17,7 +17,7 @@ import { SoapNoteGenerator } from "@/components/SoapNoteGenerator";
 import { FhirExportButton } from "@/components/FhirExportButton";
 import { sortByConsolidatedPriority } from "@/lib/alertConsolidation";
 
-export interface CaregiverLogView {
+interface CaregiverLogView {
   id: string;
   dateLabel: string;
   patientStatus: number;
