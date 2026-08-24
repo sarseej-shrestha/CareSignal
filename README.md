@@ -1,20 +1,12 @@
 # CareSignal
 
-**A text message tells a nurse when a chemo patient, or the person taking care of them, needs help before either of them has to call in.**
+**Catch problems before they become emergencies.**
 
-No app. No login. No smartphone required. Just a phone number.
+### [Try the live demo](https://sarseej-shrestha.github.io/CareSignal/)
 
-<p align="center">
-  <img src="docs/assets/demo.gif" alt="CareSignal dashboard demo: a nurse's triage queue, a caregiver-burden alert, a live AI risk escalation, and an AI-drafted SOAP note" width="760" />
-</p>
+A text message tells a nurse when a chemo patient, or the person taking care of them, needs help before either of them has to call in. No app. No login. No smartphone required. Just a phone number.
 
-<p align="center">
-  <sub>↑ Real, unedited screen recording of the running app, not a mockup. <a href="docs/demo-script.md">Full timed demo script</a> · <a href="#try-the-demo-yourself">Run it yourself in 3 commands</a></sub>
-</p>
-
-## Live demo
-
-**Try CareSignal live:** _deployed URL goes here once published_ — no signup, no setup. Open it and click "Try the live demo" to walk through a real patient message, a real AI risk assessment, a real caregiver-burden alert, and a real clinical note draft.
+The link above is a self-contained, interactive walkthrough that runs entirely in your browser: send a real patient message, watch CareSignal detect risk, see the care team get alerted, generate a clinical note, and view a separate caregiver-burden signal and a 7-day hospitalization forecast. This repository is the actual product behind it, the Next.js application with a real database, a real trained risk model, and real SMS/AI integrations.
 
 ---
 
@@ -40,35 +32,15 @@ flowchart TD
 
 Every step above is real, running code, not a concept diagram. The AI layer parses text and drafts notes. It never decides treatment, and every hard clinical threshold (like a 100.4°F fever) is evaluated by plain, auditable rules that don't depend on any model.
 
-## See it in action
+## What the demo covers
 
-The recording above is one continuous pass through the real app, in this order:
+The interactive demo at [`demo-site/`](demo-site) walks through the actual application's real scenarios, real risk output, and a real AI-generated clinical note, without needing a server:
 
-1. **Priority queue** — every patient's clinical status and their caregiver's status shown in the *same row*, not two lists to cross-reference.
-2. **Caregiver burden, paired** — click into Ruth Trahan and her clinical "why" box sits directly beside her caregiver's "why" box. Two days earlier, her daughter Angela had texted: *"I don't know how much longer I can keep doing this... I'm exhausted."* That's a separate, purple-coded alert, never folded into Ruth's clinical score.
-3. **Live model escalation** — a real click on the demo panel triggers Denise Guidry's check-in. Hard rules alone would only reach YELLOW. The trained classifier reads the *trend* and escalates her to RED (p=0.96), live, on screen.
-4. **The hard safety floor** — Michael Naquin's 101.3°F fever fires a plain, interpretable rule (≥100.4°F, the real neutropenic fever threshold), independent of any model.
-5. **AI-drafted SOAP note** — one click turns his check-in history into a Subjective/Objective/Assessment/Plan note, generated live against a real API. It starts as an **unreviewed draft at the database level** and stays labeled that way until a clinician explicitly marks it reviewed.
-
-<p align="center">
-  <img src="docs/assets/caregiver-burden.jpg" alt="Ruth Trahan's detail panel showing the clinical risk reasons and caregiver-burden reasons side by side" width="720" />
-  <br/><sub>The pairing from step 2. Clinical risk and caregiver burden are computed completely separately and never blended into one score.</sub>
-</p>
-
-### Try the demo yourself
-
-The fastest way to see CareSignal is the guided walkthrough at `/demo` once it's running (see [Live demo](#live-demo)). It sends a real seeded patient message through the real risk engine and shows the real result, no Twilio account or manual setup needed.
-
-To run it locally:
-
-```bash
-npm install
-npx prisma db push
-npx tsx prisma/seed.ts
-npm run dev
-```
-
-Set `DEMO_MODE="true"` in `.env` (see `.env.example`), open [http://localhost:3000](http://localhost:3000), and click "Try the live demo." The old dashboard fallback panel (click a scenario button, or press **Alt+1 / Alt+2 / Alt+3** anywhere on `/dashboard`) still works too. Full walkthrough: [`docs/demo-script.md`](docs/demo-script.md).
+- A patient's freeform SMS gets parsed and triaged, showing the real divergence between the hard clinical rules (which alone would only reach a moderate flag) and the trained model (which reads the trend and escalates further).
+- The care team's view of that patient: symptoms, risk factors, and an AI-drafted SOAP note, labeled as a draft that requires clinician review.
+- A separate patient's caregiver check-in, showing caregiver burden tracked as its own signal, its own color, never folded into the patient's clinical score.
+- The 7-day hospitalization forecast, a different model answering a different question than the daily risk badge.
+- An optional look at the FHIR-lite export.
 
 ## Why CareSignal
 
@@ -99,6 +71,7 @@ A nurse managing 50–100 patients can't personally call each one every day. Dai
 - **ML:** Two hand-trained logistic regression models (no external ML library), a daily symptom-risk classifier and a separate 7-day hospitalization-risk forecaster, both trained on simulated data; see [`docs/model-calibration.md`](docs/model-calibration.md)
 - **Charts:** Recharts
 - **Testing:** Vitest (143 unit + integration tests against a dedicated test DB) plus a custom concurrency/load test
+- **Pages demo:** dependency-free HTML/CSS/JS in [`demo-site/`](demo-site), deployed by [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)
 
 ## Run locally
 
@@ -109,14 +82,14 @@ npx tsx prisma/seed.ts
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Then open [http://localhost:3000](http://localhost:3000). Click "Try the live demo" for the guided, real-backend walkthrough at `/demo`, or go straight to `/dashboard` for the nurse triage view.
 
 Required environment variables (see `.env.example`):
 
 - `DATABASE_URL` — SQLite file path, defaults to `file:./dev.db`
 - `GROQ_API_KEY` — required for freeform SMS parsing and SOAP note generation
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` — required only for live inbound SMS via `/api/twilio/inbound`
-- `DEMO_MODE` — set to `"true"` to enable the local fallback described above (see `docs/pitch-notes.md`)
+- `DEMO_MODE` — set to `"true"` to enable the local fallback panel on `/dashboard` (Alt+1 / Alt+2 / Alt+3, see `docs/pitch-notes.md`)
 
 ### Testing
 
@@ -128,7 +101,7 @@ npx tsx scripts/load-test.ts  # concurrency/load test against a live `npm run de
 
 The load test writes real numbers to `docs/load-test-results.md` and needs `npm run dev` running in another terminal. It writes into the actual seeded `dev.db`, so re-seed afterward (`npx tsx prisma/seed.ts`) to restore the clean demo baseline.
 
-### Deploying
+### Deploying the application
 
 CareSignal uses SQLite as a real file on disk, so it needs a host that runs the app as a long-lived server with a persistent volume, not a stateless serverless platform. [Railway](https://railway.app) works well for this:
 
@@ -136,6 +109,8 @@ CareSignal uses SQLite as a real file on disk, so it needs a host that runs the 
 2. Point `DATABASE_URL` at a path on Railway's persistent volume instead of the repo-relative default.
 3. Set `GROQ_API_KEY`, `DEMO_MODE="true"`, and (optionally) the Twilio variables in Railway's environment settings. Never commit real credentials.
 4. Once the volume is attached, run `npx prisma db push` and `npx tsx prisma/seed.ts` against it once so the deployed instance starts from the clean seeded baseline.
+
+The GitHub Pages demo at the top of this file is separate from this deployment: it's a static, client-side walkthrough that needs no hosting decisions or credentials at all, and redeploys automatically from `demo-site/` on every push to `main`.
 
 ### What's in the dashboard
 
@@ -149,7 +124,6 @@ CareSignal uses SQLite as a real file on disk, so it needs a host that runs the 
 
 ### Docs
 
-- [`docs/demo-script.md`](docs/demo-script.md) — timed, word-for-word ~3-minute live demo script
 - [`docs/pitch-notes.md`](docs/pitch-notes.md) — talking points and demo-day logistics
 - [`docs/model-calibration.md`](docs/model-calibration.md) — training data, metrics, and validation plan for both risk models
 - [`docs/load-test-results.md`](docs/load-test-results.md) — concurrency/load test results, including a real concurrency bug found and fixed

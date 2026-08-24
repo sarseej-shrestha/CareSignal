@@ -195,7 +195,8 @@ export interface ScenarioResult {
   reasons?: string[];
   // Present for trahan-burden — the real caregiver-burden alert reasons,
   // plus the real 7-day hospitalization forecast for the same patient (the
-  // scenario deliberately pairs these two, same as docs/demo-script.md).
+  // scenario deliberately pairs these two, since Ruth's caregiver signal is
+  // part of why her forecast is elevated).
   caregiverBurdenReasons?: string[];
   hospitalizationRiskScore?: number;
   hospitalizationRiskFactors?: string[];
