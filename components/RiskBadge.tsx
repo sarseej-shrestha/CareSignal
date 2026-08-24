@@ -41,7 +41,7 @@ export function RiskBadge({ level, score }: { level: BadgeLevel; score?: number 
       <Icon className="size-3.5" />
       {label}
       {typeof score === "number" && level !== "CAREGIVER_BURDEN" && (
-        <span className="tabular-nums opacity-80">p={score.toFixed(2)}</span>
+        <span className="font-mono tabular-nums opacity-80">p={score.toFixed(2)}</span>
       )}
     </span>
   );

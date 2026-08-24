@@ -51,8 +51,8 @@ export function PatientRiskTable({
             type="button"
             onClick={() => onSelect(p.id)}
             className={cn(
-              "flex flex-col gap-2 px-4 py-3 text-left transition hover:bg-muted/40",
-              selectedId === p.id && "bg-muted/60"
+              "flex flex-col gap-2 px-4 py-3 text-left outline-none transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+              selectedId === p.id && "bg-accent/60"
             )}
           >
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -79,7 +79,8 @@ export function PatientRiskTable({
                 className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--viz-series-fever)]/35 bg-[var(--viz-series-fever)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--viz-series-fever)]"
                 title="Daily clinical risk AND 7-day hospitalization risk are both elevated — shown as one notification, not two."
               >
-                {isDual ? "+ " : ""}7-day risk {(p.hospitalizationRiskScore * 100).toFixed(0)}%
+                {isDual ? "+ " : ""}7-day risk{" "}
+                <span className="font-mono tabular-nums">{(p.hospitalizationRiskScore * 100).toFixed(0)}%</span>
               </span>
             )}
           </button>

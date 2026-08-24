@@ -36,11 +36,11 @@ export function HospitalizationRiskPanel({
           7-day hospitalization risk
           <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-normal">Prototype estimate</span>
         </div>
-        <span className="tabular-nums text-sm font-semibold text-[var(--viz-series-fever)]">{pct}%</span>
+        <span className="font-mono text-sm font-semibold tabular-nums text-[var(--viz-series-fever)]">{pct}%</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-[var(--viz-series-fever)]"
+          className="h-full rounded-full bg-[var(--viz-series-fever)] transition-[width] duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
