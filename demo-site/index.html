@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CareSignal — Try the demo</title>
+  <meta name="description" content="Catch problems before they become emergencies. Try an interactive walkthrough of CareSignal's SMS-first symptom monitoring." />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="wordmark">
+      <span class="wordmark-badge" aria-hidden="true"></span>
+      CareSignal
+    </div>
+    <a class="topbar-link" href="https://github.com/sarseej-shrestha/CareSignal" target="_blank" rel="noreferrer">View source</a>
+  </header>
+
+  <div id="stepper" class="stepper" hidden>
+    <ol>
+      <li data-step="0"><span class="step-dot">1</span><span class="step-label">Patient</span></li>
+      <li data-step="1"><span class="step-dot">2</span><span class="step-label">Detection</span></li>
+      <li data-step="2"><span class="step-dot">3</span><span class="step-label">Triage</span></li>
+      <li data-step="3"><span class="step-dot">4</span><span class="step-label">Intervention</span></li>
+    </ol>
+  </div>
+
+  <main id="app">
+
+    <section id="stage-landing" class="stage" data-active="true">
+      <div class="hero">
+        <h1>Catch problems before they become emergencies.</h1>
+        <p class="hero-body">
+          CareSignal helps care teams spot worsening symptoms between appointments so they can step in earlier.
+          Chemotherapy patients and their caregivers check in daily by text message. No app, no login, no
+          smartphone required.
+        </p>
+        <button id="btn-start" class="btn btn-primary btn-lg" type="button">Try the demo</button>
+        <p class="hero-note">Runs entirely in your browser. Real scenarios, no server or account needed.</p>
+      </div>
+    </section>
+
+    <section id="stage-patient" class="stage" hidden>
+      <h2 class="stage-title">A patient checks in</h2>
+      <p class="stage-body">
+        Denise Guidry is on cycle 4 of chemotherapy for lung cancer. She doesn't use an app or a portal.
+        She just texts CareSignal's number, in her own words.
+      </p>
+      <div class="phone" id="phone-patient">
+        <div class="phone-header">
+          <span class="phone-name">Denise Guidry</span>
+          <span class="phone-sub">985-555-0144</span>
+        </div>
+        <div class="phone-body" id="phone-patient-body">
+          <div class="bubble bubble-pending" id="bubble-patient"></div>
+        </div>
+      </div>
+      <button id="btn-send-patient" class="btn btn-primary" type="button">Send message</button>
+    </section>
+
+    <section id="stage-detection" class="stage" hidden>
+      <h2 class="stage-title">Message received</h2>
+      <p class="stage-body">
+        CareSignal parses freeform text like this with a small language model, the same way it would parse
+        structured shorthand like &ldquo;7,4,6,98.7&rdquo;. No app needed on either end.
+      </p>
+      <div id="detection-loading" class="loading-line">
+        <span class="spinner" aria-hidden="true"></span>
+        CareSignal is reading this message&hellip;
+      </div>
+      <div id="detection-result" hidden>
+        <div class="tag tag-ai">Parsed by AI from freeform text</div>
+        <div class="block">
+          <div class="block-label">Symptoms detected</div>
+          <ul id="symptom-list" class="bullet-list"></ul>
+        </div>
+        <button id="btn-to-triage" class="btn btn-primary" type="button">See risk assessment</button>
+      </div>
+    </section>
+
+    <section id="stage-triage" class="stage" hidden>
+      <div class="alert-card" id="triage-card">
+        <div class="alert-card-head">
+          <div>
+            <div class="eyebrow"><span class="bell" aria-hidden="true">&#9679;</span> New alert on the triage queue</div>
+            <h2 class="stage-title" style="margin:0">Denise Guidry</h2>
+          </div>
+          <span id="risk-badge" class="badge badge-red"></span>
+        </div>
+        <p class="quote">&ldquo;feeling a lot worse today, pain's up a lot and I'm just wiped out, no fever though&rdquo;</p>
+        <div class="block">
+          <div class="block-label">Why this risk level</div>
+          <ul id="reasons-list" class="bullet-list"></ul>
+        </div>
+        <p class="fine-print" id="divergence-note"></p>
+        <button id="btn-review-patient" class="btn btn-primary" type="button">Review patient</button>
+      </div>
+    </section>
+
+    <section id="stage-context" class="stage" hidden>
+      <h2 class="stage-title">Patient context</h2>
+      <p class="stage-body">Denise's alert is now open on a nurse's real triage queue.</p>
+      <div class="context-grid">
+        <div class="context-item"><span class="context-label">Diagnosis</span><span>Non-small cell lung cancer</span></div>
+        <div class="context-item"><span class="context-label">Treatment</span><span>Cycle 4 of 6</span></div>
+        <div class="context-item"><span class="context-label">Parish</span><span>Terrebonne</span></div>
+        <div class="context-item"><span class="context-label">Risk level</span><span>High risk (p=0.96)</span></div>
+      </div>
+      <div class="block">
+        <div class="block-label">Recent check-in values</div>
+        <div class="values-row">
+          <span>Pain <b>7</b>/10</span>
+          <span>Nausea <b>4</b>/10</span>
+          <span>Fatigue <b>6</b>/10</span>
+          <span>Temp <b>98.7</b>&deg;F</span>
+        </div>
+      </div>
+      <button id="btn-to-soap" class="btn btn-primary" type="button">Generate clinical note</button>
+    </section>
+
+    <section id="stage-soap" class="stage" hidden>
+      <h2 class="stage-title">Draft a clinical note</h2>
+      <p class="stage-body">
+        One click turns her check-in history into a Subjective / Objective / Assessment / Plan note.
+      </p>
+      <div id="soap-loading" class="loading-line" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        Drafting note from recent check-ins&hellip;
+      </div>
+      <div id="soap-result" hidden>
+        <div class="note-banner">
+          <strong>AI GENERATED</strong>
+          <span>CLINICIAN REVIEW REQUIRED</span>
+        </div>
+        <dl class="soap-dl">
+          <div><dt>S — Subjective</dt><dd id="soap-s"></dd></div>
+          <div><dt>O — Objective</dt><dd id="soap-o"></dd></div>
+          <div><dt>A — Assessment</dt><dd id="soap-a"></dd></div>
+          <div><dt>P — Plan</dt><dd id="soap-p"></dd></div>
+        </dl>
+        <p class="fine-print">Starts as an unreviewed draft and stays labeled that way until a clinician marks it reviewed. It assists the care team, it does not replace clinical judgment.</p>
+      </div>
+      <button id="btn-gen-soap" class="btn btn-primary" type="button">Generate clinical note</button>
+      <button id="btn-to-caregiver" class="btn btn-outline" type="button" hidden>Continue</button>
+    </section>
+
+    <section id="stage-caregiver" class="stage" hidden>
+      <h2 class="stage-title">A second, separate signal</h2>
+      <p class="stage-body">
+        Denise doesn't have a caregiver on file. Most symptom trackers stop at the patient.
+        CareSignal doesn't. Here's a different patient on the same queue, Ruth Trahan, whose daughter
+        Angela checks in on her own channel.
+      </p>
+      <div class="phone" id="phone-caregiver">
+        <div class="phone-header">
+          <span class="phone-name">Angela Trahan</span>
+          <span class="phone-sub">Daughter of Ruth Trahan</span>
+        </div>
+        <div class="phone-body" id="phone-caregiver-body">
+          <div class="bubble bubble-history">
+            <span></span>
+            <span class="bubble-time">2 days ago</span>
+          </div>
+          <div class="bubble bubble-pending" id="bubble-caregiver"></div>
+        </div>
+      </div>
+      <button id="btn-send-caregiver" class="btn btn-primary" type="button">Send message</button>
+      <div id="caregiver-result" hidden>
+        <div class="burden-box">
+          <span class="badge badge-burden">Caregiver burden</span>
+          <ul id="caregiver-reasons" class="bullet-list"></ul>
+          <p class="fine-print">This never changes Ruth's own clinical risk score. It's tracked, colored, and reasoned about completely separately.</p>
+        </div>
+        <button id="btn-to-forecast" class="btn btn-primary" type="button">See risk forecast</button>
+      </div>
+    </section>
+
+    <section id="stage-forecast" class="stage" hidden>
+      <h2 class="stage-title">Looking ahead a week, not just today</h2>
+      <p class="stage-body">
+        A separate model forecasts hospitalization risk over the next 7 days. Ruth's caregiver signal
+        feeds into this forecast too, which is part of why her score is high even though she doesn't
+        have the worst symptoms today.
+      </p>
+      <div class="forecast-panel">
+        <div class="forecast-head">
+          <span>7-day hospitalization risk</span>
+          <span class="forecast-tag">Prototype estimate</span>
+        </div>
+        <svg id="forecast-chart" viewBox="0 0 320 90" class="forecast-svg" role="img" aria-label="7-day hospitalization risk, 52 percent">
+          <line x1="10" y1="70" x2="310" y2="70" class="forecast-axis" />
+          <path id="forecast-path" class="forecast-line" fill="none" />
+          <circle id="forecast-point" r="5" class="forecast-point" tabindex="0" />
+          <text id="forecast-value" class="forecast-value-label" x="270" y="30"></text>
+        </svg>
+        <p class="fine-print">Hover or tap the point to see the exact value.</p>
+        <ul id="forecast-factors" class="bullet-list"></ul>
+      </div>
+      <button id="btn-to-summary" class="btn btn-primary" type="button">See the complete loop</button>
+    </section>
+
+    <section id="stage-summary" class="stage" hidden>
+      <h2 class="stage-title">That's the loop</h2>
+      <div class="loop-diagram" aria-hidden="true">
+        <span>Patient</span><span class="loop-arrow">&rarr;</span>
+        <span>SMS</span><span class="loop-arrow">&rarr;</span>
+        <span>Risk detection</span><span class="loop-arrow">&rarr;</span>
+        <span>Care team</span><span class="loop-arrow">&rarr;</span>
+        <span>Intervention</span>
+      </div>
+      <p class="stage-body">
+        A message in, a real risk assessment, a nurse's queue, a documentation assist, and a second
+        signal most tools never look for.
+      </p>
+
+      <details class="fhir-details">
+        <summary>View FHIR export (optional, technical)</summary>
+        <p class="fine-print">CareSignal can package a patient's record as a FHIR-compatible bundle for a real EHR.</p>
+        <pre id="fhir-json" class="fhir-pre"></pre>
+      </details>
+
+      <div class="summary-actions">
+        <button id="btn-restart" class="btn btn-primary" type="button">Try again</button>
+        <a class="btn btn-outline" href="https://github.com/sarseej-shrestha/CareSignal" target="_blank" rel="noreferrer">View source code</a>
+      </div>
+      <p class="disclaimer">
+        Not clinically validated against real patient outcomes. Built and trained on simulated data.
+        Does not diagnose or replace a clinician's judgment.
+      </p>
+    </section>
+
+  </main>
+
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
