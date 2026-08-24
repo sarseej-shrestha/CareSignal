@@ -20,6 +20,7 @@ import { assessRisk } from "./risk";
 import type { DailySymptoms } from "./riskEngine";
 import { recordCaregiverLog, recordSymptomLog } from "./inbound";
 import { daysAgo, patients, type SeedPatient } from "./seedData";
+import { computeHospitalizationRisk, hospitalizationFactors } from "./hospitalizationRisk";
 
 export interface DemoScenario {
   id: string;
@@ -186,6 +187,18 @@ export interface ScenarioResult {
   patientId: string;
   patientName: string;
   summary: string;
+  // Present for the daily-risk scenarios (naquin-fever, guidry-divergence) —
+  // the real, just-computed clinical assessment, so a caller like /demo can
+  // render it directly instead of re-deriving or fabricating anything.
+  riskStatus?: "GREEN" | "YELLOW" | "RED";
+  riskScore?: number;
+  reasons?: string[];
+  // Present for trahan-burden — the real caregiver-burden alert reasons,
+  // plus the real 7-day hospitalization forecast for the same patient (the
+  // scenario deliberately pairs these two, same as docs/demo-script.md).
+  caregiverBurdenReasons?: string[];
+  hospitalizationRiskScore?: number;
+  hospitalizationRiskFactors?: string[];
 }
 
 export async function triggerScenario(scenarioId: string): Promise<ScenarioResult> {
@@ -203,6 +216,9 @@ export async function triggerScenario(scenarioId: string): Promise<ScenarioResul
         patientId: patient.id,
         patientName: `${seed.firstName} ${seed.lastName}`,
         summary: `Risk escalated to ${assessment.level} (p=${assessment.modelProb.toFixed(2)}): ${assessment.reasons[0] ?? ""}`,
+        riskStatus: assessment.level,
+        riskScore: assessment.modelProb,
+        reasons: assessment.reasons,
       };
     }
     case "guidry-divergence": {
@@ -214,11 +230,21 @@ export async function triggerScenario(scenarioId: string): Promise<ScenarioResul
         patientId: patient.id,
         patientName: `${seed.firstName} ${seed.lastName}`,
         summary: `Risk escalated to ${assessment.level} (p=${assessment.modelProb.toFixed(2)}) — rules alone would only reach YELLOW here.`,
+        riskStatus: assessment.level,
+        riskScore: assessment.modelProb,
+        reasons: assessment.reasons,
       };
     }
     case "trahan-burden": {
       const seed = findSeedPatient("OCH-70146");
       const { patient, burdenFlagged } = await triggerCaregiverBurdenScenario(seed);
+      const burdenAlert = burdenFlagged
+        ? await prisma.riskAlert.findFirst({
+            where: { patientId: patient.id, level: "CAREGIVER_BURDEN" },
+            orderBy: { createdAt: "desc" },
+          })
+        : null;
+      const hosp = await computeHospitalizationRisk(patient.id);
       return {
         scenarioId,
         patientId: patient.id,
@@ -226,6 +252,9 @@ export async function triggerScenario(scenarioId: string): Promise<ScenarioResul
         summary: burdenFlagged
           ? "Caregiver burden flagged — separate from Ruth's own clinical risk."
           : "Caregiver check-in logged (coping score above the burden threshold — try again if the fixture data changes).",
+        caregiverBurdenReasons: burdenAlert ? (JSON.parse(burdenAlert.reasons) as string[]) : undefined,
+        hospitalizationRiskScore: hosp.score,
+        hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
       };
     }
     default:
