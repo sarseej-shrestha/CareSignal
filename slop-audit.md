@@ -63,16 +63,20 @@ Only used as the `logs: SeedSymptomDay[]` field type inside `SeedPatient`
 
 ---
 
-### 4. Dead export — `lib/seedData.ts:38`
+### 4. Dead export — `lib/seedData.ts:38` — **FALSE POSITIVE, not applied**
 
 ```ts
 export interface SeedCaregiverDay {
 ```
 
-Same situation as #3 — only used inside `SeedPatient.caregiver.logs` in the
-same file, line 68.
+~~Same situation as #3 — only used inside `SeedPatient.caregiver.logs` in the
+same file, line 68.~~
 
-**Proposed change:** drop the `export` keyword.
+**Correction (caught during pre-apply verification):** this type is also
+imported and used by name in `prisma/seed.ts:10,93`
+(`import { patients, daysAgo, type SeedCaregiverDay } from "../lib/seedData"`,
+`let lastLog: SeedCaregiverDay | undefined`). The audit's grep missed this
+external caller. Left exported — see `slop-applied.md`.
 
 ---
 
