@@ -1,0 +1,5 @@
+# Every file in this repository requires review from the owner before merge.
+# This file only takes effect once branch protection on `main` has
+# "Require review from Code Owners" enabled (GitHub Settings — not
+# something this file can configure on its own).
+* @sarseej-shrestha
