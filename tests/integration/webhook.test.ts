@@ -411,12 +411,20 @@ describe("POST /api/twilio/inbound — need classification", () => {
     expect(xml).not.toContain("Thanks for checking in");
   });
 
-  it("replies with a category-specific acknowledgment for EMOTIONAL", async () => {
+  it("replies with a category-specific acknowledgment for EMOTIONAL, worded truthfully (not claiming human acknowledgment)", async () => {
     await seedTestPatient({ phone: "+19995551513" });
     mockPatientParse({ needCategory: "EMOTIONAL" });
     const res = await POST(formRequest({ From: "+19995551513", To: "+1900", Body: "I'm so scared" }));
     const xml = await res.text();
     expect(xml).toContain("Thank you for sharing");
+    // Semifinal red-team fix: alert creation isn't proof a human has seen
+    // the message yet — the reply must describe only what's actually true
+    // at send time ("received and sent for review"), not "has been
+    // notified" / "someone will follow up", and should carry a 911 line
+    // since this is the reply for non-crisis-gated emotional distress.
+    expect(xml).toContain("received and sent to your care team for review");
+    expect(xml).not.toContain("has been notified");
+    expect(xml).toContain("911");
   });
 
   it("replies with a category-specific acknowledgment for FINANCIAL", async () => {

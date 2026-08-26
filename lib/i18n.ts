@@ -75,10 +75,19 @@ const MESSAGES = {
     fr: "Merci de nous en avoir informés. J'ai signalé ceci à votre équipe de soins pour qu'elle puisse vous aider.",
     es: "Gracias por avisarnos. He señalado esto a su equipo de atención para que puedan ayudarle.",
   },
+  // Semifinal red-team fix: "has been notified" overstated what actually
+  // happened at send time — an alert row is created, not confirmation a
+  // human has seen it yet. Reworded to describe only what's true right now
+  // (received, sent for review), plus a general emergency-call line since
+  // this ack covers non-crisis emotional distress and shouldn't leave a
+  // patient without a clear "if this is worse than that, here's what to
+  // do" — the safety gate / crisisLanguageDetected layer (lib/safetyGate.ts,
+  // lib/ai.ts) already intercepts actual crisis language before this
+  // message would ever be sent.
   ackEmotional: {
-    en: "Thank you for sharing that. Your care team has been notified and someone will follow up with you.",
-    fr: "Merci de nous en avoir fait part. Votre équipe de soins a été avertie et quelqu'un vous contactera.",
-    es: "Gracias por compartir eso. Se ha notificado a su equipo de atención y alguien se comunicará con usted.",
+    en: "Thank you for sharing that. Your message has been received and sent to your care team for review. If this is a medical emergency, call 911.",
+    fr: "Merci de nous en avoir fait part. Votre message a été reçu et transmis à votre équipe de soins pour examen. En cas d'urgence médicale, appelez le 911.",
+    es: "Gracias por compartir eso. Su mensaje ha sido recibido y enviado a su equipo de atención para revisión. Si es una emergencia médica, llame al 911.",
   },
   ackFinancial: {
     en: "Thanks for letting us know. I've flagged this for your care team so they can connect you with support.",
