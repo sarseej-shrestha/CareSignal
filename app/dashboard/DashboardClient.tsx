@@ -9,6 +9,7 @@ import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendCha
 import { RiskBadge } from "@/components/RiskBadge";
 import { CareNeedBadge } from "@/components/CareNeedBadge";
 import { AlertStatusControl } from "@/components/AlertStatusControl";
+import type { ClinicalSnapshot } from "@/lib/clinicalSnapshot";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
 import { LimitationsPanel } from "@/components/LimitationsPanel";
@@ -49,6 +50,7 @@ export interface DashboardPatient extends QueuePatient {
     logs: CaregiverLogView[];
   } | null;
   caregiverBurdenReasons: string[] | null;
+  clinicalSnapshot: ClinicalSnapshot | null;
   clinicalAlertId: string | null;
   clinicalAlertStatus: string | null;
   burdenAlertId: string | null;
@@ -144,6 +146,57 @@ export function DashboardClient({
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
+            {/* At-a-glance clinical snapshot — what the patient actually
+                said, when, and how that compares to their own recent
+                baseline (real deltas, same math as the risk engine's own
+                3-day trend rule, not a new chart or a new data source).
+                Answers "why am I seeing this, what changed" before the
+                clinician reads anything else. */}
+            {selected.clinicalSnapshot && (
+              <div className="rounded-lg border border-dashed p-3">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Latest check-in · {selected.clinicalSnapshot.latestDateLabel}
+                  </span>
+                  <SourceBadge
+                    source={selected.clinicalSnapshot.latestSource as LogSource}
+                    parsedByAi={selected.clinicalSnapshot.parsedByAi}
+                  />
+                </div>
+                {selected.clinicalSnapshot.latestRawText && (
+                  <p className="mb-2 flex items-start gap-1.5 text-sm italic text-muted-foreground">
+                    <MessageCircle className="mt-0.5 size-3.5 shrink-0" />
+                    &ldquo;{selected.clinicalSnapshot.latestRawText}&rdquo;
+                  </p>
+                )}
+                {selected.clinicalSnapshot.deltas ? (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {(["pain", "nausea", "fatigue"] as const).map((dim) => {
+                      const delta = selected.clinicalSnapshot!.deltas![dim];
+                      if (Math.abs(delta) < 0.5) return null;
+                      return (
+                        <span key={dim} className={delta > 0 ? "font-medium text-[var(--viz-status-critical)]" : undefined}>
+                          {delta > 0 ? "↑" : "↓"} {dim} {Math.abs(delta).toFixed(1)} pts vs. recent baseline
+                        </span>
+                      );
+                    })}
+                    {Math.abs(selected.clinicalSnapshot.deltas.fever) >= 0.5 && (
+                      <span
+                        className={
+                          selected.clinicalSnapshot.deltas.fever > 0 ? "font-medium text-[var(--viz-status-critical)]" : undefined
+                        }
+                      >
+                        {selected.clinicalSnapshot.deltas.fever > 0 ? "↑" : "↓"} temp{" "}
+                        {Math.abs(selected.clinicalSnapshot.deltas.fever).toFixed(1)}° vs. recent baseline
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No baseline yet — this is an early check-in.</p>
+                )}
+              </div>
+            )}
+
             {/* The two "why" boxes, paired side by side — the same unified
                 pairing as the queue card above, carried into the detail
                 view. Clinical risk is rules-based and the most defensible

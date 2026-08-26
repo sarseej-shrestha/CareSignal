@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { computeHospitalizationRisk, hospitalizationFactors } from "@/lib/hospitalizationRisk";
+import { computeClinicalSnapshot } from "@/lib/clinicalSnapshot";
 import { DashboardClient, type DashboardPatient } from "./DashboardClient";
 
 export const metadata: Metadata = {
@@ -109,6 +110,7 @@ export default async function DashboardPage({
               })),
           }
         : null,
+      clinicalSnapshot: computeClinicalSnapshot(p.symptomLogs, formatDateLabel),
       caregiverBurdenReasons: burdenAlert ? (JSON.parse(burdenAlert.reasons) as string[]) : null,
       burdenAlertId: burdenAlert?.id ?? null,
       burdenAlertStatus: burdenAlert?.status ?? null,
