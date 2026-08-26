@@ -419,6 +419,28 @@ describe("POST /api/twilio/inbound — need classification", () => {
     expect(await prisma.riskAlert.count({ where: { patientId: patient.id } })).toBe(0);
   });
 
+  it("flags treatment-interruption risk on a LOGISTICAL need for a frequent-treatment patient", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551510", treatmentFrequency: "weekly" });
+    mockPatientParse({ needCategory: "LOGISTICAL" });
+    await POST(
+      formRequest({ From: "+19995551510", To: "+1900", Body: "I can't get a ride to my appointment" })
+    );
+    const alert = await prisma.riskAlert.findFirst({ where: { patientId: patient.id, level: "LOGISTICAL" } });
+    const reasons = JSON.parse(alert!.reasons) as string[];
+    expect(reasons.some((r) => r.toLowerCase().includes("interrupt"))).toBe(true);
+  });
+
+  it("does NOT flag treatment-interruption risk for an infrequent-treatment patient", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551511", treatmentFrequency: "monthly" });
+    mockPatientParse({ needCategory: "LOGISTICAL" });
+    await POST(
+      formRequest({ From: "+19995551511", To: "+1900", Body: "I can't get a ride to my appointment" })
+    );
+    const alert = await prisma.riskAlert.findFirst({ where: { patientId: patient.id, level: "LOGISTICAL" } });
+    const reasons = JSON.parse(alert!.reasons) as string[];
+    expect(reasons.some((r) => r.toLowerCase().includes("interrupt"))).toBe(false);
+  });
+
   it("defaults structured numeric reports to CLINICAL without calling the LLM", async () => {
     const patient = await seedTestPatient({ phone: "+19995551507" });
     await POST(formRequest({ From: "+19995551507", To: "+1900", Body: "3,2,4,98.6" }));

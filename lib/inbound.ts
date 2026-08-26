@@ -7,6 +7,8 @@ import { assessRisk, type RiskAssessment } from "./risk";
 import type { DailySymptoms } from "./riskEngine";
 import { computeHospitalizationRisk } from "./hospitalizationRisk";
 import type { NeedCategory } from "./needCategory";
+import type { TreatmentFrequency } from "./transportationResources";
+import { checkTreatmentInterruptionRisk } from "./treatmentInterruptionRisk";
 
 export type LogSource = "PATIENT_SMS" | "CAREGIVER_SMS" | "WEB";
 
@@ -41,6 +43,10 @@ export async function recordSymptomLog(params: {
   // unambiguously clinical. Only the freeform AI-parsed path passes a
   // real value, from lib/ai.ts's needCategory field.
   needCategory?: NeedCategory;
+  // Optional — only used to check treatment-interruption risk on a
+  // LOGISTICAL need (lib/treatmentInterruptionRisk.ts). Omitted by callers
+  // that don't have it handy; the interruption check is simply skipped.
+  treatmentFrequency?: TreatmentFrequency;
 }): Promise<RiskAssessment> {
   const needCategory = params.needCategory ?? "CLINICAL";
 
@@ -65,11 +71,18 @@ export async function recordSymptomLog(params: {
   // (LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN) surfaces on the same queue a
   // clinical alert would, routed by category instead of severity.
   if (needCategory !== "CLINICAL" && needCategory !== "ROUTINE" && params.rawSmsText) {
+    const reasons = [`Message: "${params.rawSmsText}"`];
+
+    if (needCategory === "LOGISTICAL" && params.treatmentFrequency) {
+      const interruption = checkTreatmentInterruptionRisk(params.treatmentFrequency);
+      if (interruption.atRisk && interruption.reason) reasons.push(interruption.reason);
+    }
+
     await prisma.riskAlert.create({
       data: {
         patientId: params.patientId,
         level: needCategory,
-        reasons: JSON.stringify([`Message: "${params.rawSmsText}"`]),
+        reasons: JSON.stringify(reasons),
         modelProb: null,
         status: "OPEN",
       },

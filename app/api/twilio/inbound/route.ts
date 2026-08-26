@@ -13,6 +13,7 @@ import {
 import type { RiskAssessment } from "@/lib/risk";
 import { normalizeLang, t, type Lang } from "@/lib/i18n";
 import { checkSafetyGate } from "@/lib/safetyGate";
+import type { TreatmentFrequency } from "@/lib/transportationResources";
 
 // Twilio computes its request signature against the exact public URL it
 // POSTed to (the webhook URL configured in the Twilio console) — https,
@@ -107,6 +108,7 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         rawSmsText: body,
         parsedByAi: true,
         needCategory: parsed.needCategory,
+        treatmentFrequency: sender.patient.treatmentFrequency as TreatmentFrequency,
       });
       return twiml(riskAckMessage(assessment, lang));
     } catch (err) {
@@ -161,6 +163,7 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         rawSmsText: body,
         parsedByAi: true,
         needCategory: parsed.needCategory,
+        treatmentFrequency: sender.patient.treatmentFrequency as TreatmentFrequency,
       });
     }
 
