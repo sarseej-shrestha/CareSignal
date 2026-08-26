@@ -402,6 +402,47 @@ describe("POST /api/twilio/inbound — need classification", () => {
     expect(log?.needCategory).toBe("CLINICAL");
   });
 
+  it("replies with a category-specific acknowledgment for LOGISTICAL, not a generic 'logged' reply", async () => {
+    await seedTestPatient({ phone: "+19995551512" });
+    mockPatientParse({ needCategory: "LOGISTICAL" });
+    const res = await POST(formRequest({ From: "+19995551512", To: "+1900", Body: "I can't get a ride" }));
+    const xml = await res.text();
+    expect(xml).toContain("flagged this for your care team");
+    expect(xml).not.toContain("Thanks for checking in");
+  });
+
+  it("replies with a category-specific acknowledgment for EMOTIONAL", async () => {
+    await seedTestPatient({ phone: "+19995551513" });
+    mockPatientParse({ needCategory: "EMOTIONAL" });
+    const res = await POST(formRequest({ From: "+19995551513", To: "+1900", Body: "I'm so scared" }));
+    const xml = await res.text();
+    expect(xml).toContain("Thank you for sharing");
+  });
+
+  it("replies with a category-specific acknowledgment for FINANCIAL", async () => {
+    await seedTestPatient({ phone: "+19995551514" });
+    mockPatientParse({ needCategory: "FINANCIAL" });
+    const res = await POST(formRequest({ From: "+19995551514", To: "+1900", Body: "can't afford my meds" }));
+    const xml = await res.text();
+    expect(xml).toContain("connect you with support");
+  });
+
+  it("replies with a clarifying-but-honest acknowledgment for UNCERTAIN", async () => {
+    await seedTestPatient({ phone: "+19995551515" });
+    mockPatientParse({ needCategory: "UNCERTAIN" });
+    const res = await POST(formRequest({ From: "+19995551515", To: "+1900", Body: "I don't know what to do" }));
+    const xml = await res.text();
+    expect(xml).toContain("care team will follow up");
+  });
+
+  it("keeps the existing risk-based acknowledgment for CLINICAL, unchanged", async () => {
+    await seedTestPatient({ phone: "+19995551516" });
+    mockPatientParse({ needCategory: "CLINICAL", pain: 1, nausea: 1, fatigue: 2, fever: 98.4 });
+    const res = await POST(formRequest({ From: "+19995551516", To: "+1900", Body: "feeling ok" }));
+    const xml = await res.text();
+    expect(xml).toContain("Feel better");
+  });
+
   it("creates an OPEN care-need alert for a non-clinical, non-routine category", async () => {
     const patient = await seedTestPatient({ phone: "+19995551508" });
     mockPatientParse({ needCategory: "LOGISTICAL" });

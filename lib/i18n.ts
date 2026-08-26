@@ -62,6 +62,34 @@ const MESSAGES = {
     fr: "Merci de nous avoir donné des nouvelles — c'est enregistré.",
     es: "Gracias por avisarnos — quedó registrado.",
   },
+  // Category-specific acknowledgments (see lib/needCategory.ts) — used
+  // ONLY for LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN messages, so the
+  // sender knows their actual message was understood, not just "logged"
+  // as if it were a routine symptom check-in. CLINICAL and ROUTINE keep
+  // using the existing risk-based ack* messages above, unchanged — this
+  // never touches the safety-critical RED/YELLOW/GREEN pathway. No
+  // internal terminology ("need category", "AI", "classified"), no
+  // promise of a specific timeline this system can't guarantee.
+  ackLogistical: {
+    en: "Thanks for letting us know. I've flagged this for your care team so they can help.",
+    fr: "Merci de nous en avoir informés. J'ai signalé ceci à votre équipe de soins pour qu'elle puisse vous aider.",
+    es: "Gracias por avisarnos. He señalado esto a su equipo de atención para que puedan ayudarle.",
+  },
+  ackEmotional: {
+    en: "Thank you for sharing that. Your care team has been notified and someone will follow up with you.",
+    fr: "Merci de nous en avoir fait part. Votre équipe de soins a été avertie et quelqu'un vous contactera.",
+    es: "Gracias por compartir eso. Se ha notificado a su equipo de atención y alguien se comunicará con usted.",
+  },
+  ackFinancial: {
+    en: "Thanks for letting us know. I've flagged this for your care team so they can connect you with support.",
+    fr: "Merci de nous en avoir informés. J'ai signalé ceci à votre équipe de soins afin qu'elle puisse vous mettre en contact avec de l'aide.",
+    es: "Gracias por avisarnos. He señalado esto a su equipo de atención para que puedan conectarlo con apoyo.",
+  },
+  ackUncertain: {
+    en: "Thanks for your message. I want to make sure we understand — a member of your care team will follow up with you directly.",
+    fr: "Merci pour votre message. Je veux m'assurer que nous comprenons bien — un membre de votre équipe de soins vous contactera directement.",
+    es: "Gracias por su mensaje. Quiero asegurarme de que entendemos bien — un miembro de su equipo de atención se comunicará con usted directamente.",
+  },
   patientParseFailed: {
     en: 'Sorry, we couldn\'t understand that message. Please reply with your pain, nausea, and fatigue (0-10) and your temperature, e.g. "4,2,6,98.6".',
     fr: "Désolé, nous n'avons pas compris ce message. Veuillez répondre avec votre douleur, nausée et fatigue (0-10) et votre température, par exemple « 4,2,6,98.6 ».",
