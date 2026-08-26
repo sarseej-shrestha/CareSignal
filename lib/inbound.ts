@@ -87,6 +87,26 @@ export async function recordSymptomLog(params: {
   return assessment;
 }
 
+// Fired by the deterministic crisis-language safety gate (lib/safetyGate.ts)
+// — always the patient's own record, even when a caregiver sent the
+// message (a caregiver relaying crisis language about the patient is still
+// about the patient's safety). Deliberately NOT a SymptomLog: this isn't a
+// pain/nausea/fatigue/fever reading, and fabricating zero values for those
+// fields to force it into that shape would misleadingly enter the symptom
+// trend chart. A plain RiskAlert with the real quoted text is honest about
+// what this actually is.
+export async function recordSafetyAlert(params: { patientId: string; rawSmsText: string; reason: string }) {
+  return prisma.riskAlert.create({
+    data: {
+      patientId: params.patientId,
+      level: "SAFETY",
+      reasons: JSON.stringify([params.reason, `Message: "${params.rawSmsText}"`]),
+      modelProb: null,
+      status: "OPEN",
+    },
+  });
+}
+
 export async function recordCaregiverLog(params: {
   caregiverId: string;
   patientId: string;

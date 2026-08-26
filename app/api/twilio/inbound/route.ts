@@ -6,11 +6,13 @@ import {
   parseStructuredCaregiverCheckin,
   parseStructuredSymptoms,
   recordCaregiverLog,
+  recordSafetyAlert,
   recordSymptomLog,
   type Sender,
 } from "@/lib/inbound";
 import type { RiskAssessment } from "@/lib/risk";
 import { normalizeLang, t, type Lang } from "@/lib/i18n";
+import { checkSafetyGate } from "@/lib/safetyGate";
 
 // Twilio computes its request signature against the exact public URL it
 // POSTed to (the webhook URL configured in the Twilio console) — https,
@@ -69,6 +71,17 @@ function senderLang(sender: Sender): Lang {
 // the more specific, better-worded error handling already inside here for
 // the freeform-AI-parsing calls.
 async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<NextResponse> {
+  // Deterministic crisis-language check — runs on the raw text before any
+  // LLM interpretation or structured/freeform branching, for both sender
+  // types. This must fire regardless of what the AI parser would have done
+  // with the same text (see lib/safetyGate.ts). Always attaches to the
+  // PATIENT's own record, even when a caregiver sent the message.
+  const safety = checkSafetyGate(body);
+  if (safety.triggered) {
+    await recordSafetyAlert({ patientId: sender.patient.id, rawSmsText: body, reason: safety.reason! });
+    return twiml(t("safetyGate", lang, { clinicPhone: clinicTriagePhone() }));
+  }
+
   if (sender.type === "PATIENT") {
     const structured = parseStructuredSymptoms(body);
     if (structured) {

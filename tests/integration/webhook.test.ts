@@ -325,6 +325,75 @@ describe("POST /api/twilio/inbound — RED safety bounce-back", () => {
   });
 });
 
+describe("POST /api/twilio/inbound — deterministic safety gate", () => {
+  it("fires on explicit crisis language from a patient, bypassing normal symptom parsing", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551400" });
+    const res = await POST(
+      formRequest({ From: "+19995551400", To: "+1900", Body: "I don't want to live anymore" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("911");
+    expect(xml).toContain("988");
+
+    const alerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id } });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].level).toBe("SAFETY");
+    expect(alerts[0].reasons).toContain("I don't want to live anymore");
+
+    // No symptom log fabricated — this isn't a pain/nausea/fatigue/fever reading.
+    expect(await prisma.symptomLog.count({ where: { patientId: patient.id } })).toBe(0);
+    expect(parsePatientSymptomText).not.toHaveBeenCalled();
+  });
+
+  it("fires when a caregiver relays crisis language, attaching to the patient's record", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551401" });
+    await seedTestCaregiver(patient.id, { phone: "+19995551402" });
+    const res = await POST(
+      formRequest({ From: "+19995551402", To: "+1900", Body: "she said she wants to end her life" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("911");
+
+    const alerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id } });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].level).toBe("SAFETY");
+    expect(parseCaregiverMessageText).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire on ordinary emotional distress, and normal parsing proceeds", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551403" });
+    vi.mocked(parsePatientSymptomText).mockResolvedValue({
+      pain: 3,
+      nausea: 2,
+      fatigue: 5,
+      fever: 98.4,
+      feverMentioned: false,
+      summary: "feeling scared and overwhelmed",
+    });
+    const res = await POST(
+      formRequest({ From: "+19995551403", To: "+1900", Body: "I'm scared and overwhelmed about all of this" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).not.toContain("988");
+
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id, level: "SAFETY" } })).toBe(0);
+    expect(parsePatientSymptomText).toHaveBeenCalled();
+  });
+
+  it("does NOT fire on a normal structured clinical report", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551404" });
+    const res = await POST(formRequest({ From: "+19995551404", To: "+1900", Body: "3,2,4,98.6" }));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).not.toContain("988");
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id, level: "SAFETY" } })).toBe(0);
+    expect(await prisma.symptomLog.count({ where: { patientId: patient.id } })).toBe(1);
+  });
+});
+
 // Every test above runs without TWILIO_AUTH_TOKEN set, which already
 // exercises the "skip validation, demo mode" path on every request (all of
 // them return 200 with no signature header at all). These tests cover the
