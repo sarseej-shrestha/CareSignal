@@ -108,6 +108,21 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[soap-note] generation failed:", err);
-    return NextResponse.json({ error: "Failed to generate SOAP note." }, { status: 500 });
+    // Semifinal red-team fix: a Groq rate limit (observed live during
+    // testing — the free tier's 8,000 TPM cap after a handful of sequential
+    // calls) previously surfaced as the same generic message as any other
+    // failure, giving a live demo operator no signal on whether to just
+    // wait a few seconds and click "Generate" again. `status` is set on
+    // errors the `openai` SDK throws for HTTP error responses (429 here);
+    // anything without it (a network error, a malformed response) keeps
+    // the existing generic message — this doesn't change behavior for any
+    // other failure mode, only labels the one that's actually recoverable
+    // by waiting.
+    const status = (err as { status?: number } | null)?.status;
+    const message =
+      status === 429
+        ? "The AI service is briefly rate-limited — wait about 10 seconds and try again, or use the DEMO_MODE fallback."
+        : "Failed to generate SOAP note.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

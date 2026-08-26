@@ -43,6 +43,21 @@ describe("triggerScenario — chauvin-logistical", () => {
     expect(alerts).toHaveLength(1);
   });
 
+  // Semifinal red-team fix: the alert count was already correctly de-duped
+  // (test above), but the underlying SymptomLog kept accumulating one new
+  // row per trigger — invisible in the alert assertion, but real duplicate
+  // rows a nurse would see stacking up in James's timeline after repeated
+  // demo rehearsals. Verified live against the dev server (3 triggers, 9
+  // logs) before this fix; pinned here so it can't silently regress.
+  it("is idempotent — re-triggering doesn't accumulate duplicate SymptomLog rows", async () => {
+    const first = await triggerScenario("chauvin-logistical");
+    const afterFirst = await prisma.symptomLog.count({ where: { patientId: first.patientId } });
+    await triggerScenario("chauvin-logistical");
+    await triggerScenario("chauvin-logistical");
+    const afterThree = await prisma.symptomLog.count({ where: { patientId: first.patientId } });
+    expect(afterThree).toBe(afterFirst);
+  });
+
   it("throws when DEMO_MODE is not enabled", async () => {
     delete process.env.DEMO_MODE;
     await expect(triggerScenario("chauvin-logistical")).rejects.toThrow(/DEMO_MODE/);

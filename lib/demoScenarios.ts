@@ -162,6 +162,15 @@ const LOGISTICAL_DEMO_MESSAGE =
 async function triggerLogisticalNeedScenario(seed: SeedPatient) {
   const patient = await ensurePatient(seed);
   await prisma.riskAlert.deleteMany({ where: { patientId: patient.id, level: "LOGISTICAL" } });
+  // Semifinal red-team fix: this scenario appends one SymptomLog per trigger
+  // (unlike the other three scenarios, which reset the patient's full log
+  // history via resetSymptomPatientBeforeFinalLog before replaying) — the
+  // LOGISTICAL alert itself was already correctly de-duped above, but
+  // repeated rehearsal runs were silently accumulating duplicate copies of
+  // this exact demo message in James's symptom timeline. Only removing the
+  // demo message's own prior log (matched by its exact rawSmsText) keeps
+  // this idempotent without touching his other seeded baseline history.
+  await prisma.symptomLog.deleteMany({ where: { patientId: patient.id, rawSmsText: LOGISTICAL_DEMO_MESSAGE } });
 
   const latest = seed.logs[seed.logs.length - 1];
   await recordSymptomLog({
