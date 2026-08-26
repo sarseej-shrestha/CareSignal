@@ -6,6 +6,7 @@ import { prisma } from "./db";
 import { assessRisk, type RiskAssessment } from "./risk";
 import type { DailySymptoms } from "./riskEngine";
 import { computeHospitalizationRisk } from "./hospitalizationRisk";
+import type { NeedCategory } from "./needCategory";
 
 export type LogSource = "PATIENT_SMS" | "CAREGIVER_SMS" | "WEB";
 
@@ -34,6 +35,12 @@ export async function recordSymptomLog(params: {
   source: LogSource;
   rawSmsText?: string | null;
   parsedByAi?: boolean;
+  // Optional — defaults to CLINICAL. Every existing caller (demoScenarios.ts,
+  // structured-format webhook path) that predates need classification stays
+  // correct unmodified: a structured pain/nausea/fatigue/fever report IS
+  // unambiguously clinical. Only the freeform AI-parsed path passes a
+  // real value, from lib/ai.ts's needCategory field.
+  needCategory?: NeedCategory;
 }): Promise<RiskAssessment> {
   await prisma.symptomLog.create({
     data: {
@@ -45,6 +52,7 @@ export async function recordSymptomLog(params: {
       source: params.source,
       rawSmsText: params.rawSmsText ?? null,
       parsedByAi: params.parsedByAi ?? false,
+      needCategory: params.needCategory ?? "CLINICAL",
     },
   });
 

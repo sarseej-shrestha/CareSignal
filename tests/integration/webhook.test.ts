@@ -325,6 +325,92 @@ describe("POST /api/twilio/inbound — RED safety bounce-back", () => {
   });
 });
 
+describe("POST /api/twilio/inbound — need classification", () => {
+  function mockPatientParse(overrides: Partial<Awaited<ReturnType<typeof parsePatientSymptomText>>> = {}) {
+    vi.mocked(parsePatientSymptomText).mockResolvedValue({
+      pain: 1,
+      nausea: 1,
+      fatigue: 2,
+      fever: 98.4,
+      feverMentioned: false,
+      summary: "test",
+      needCategory: "ROUTINE",
+      hasAdditionalNeeds: false,
+      ...overrides,
+    });
+  }
+
+  it("stores CLINICAL for a freeform message describing a physical symptom", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551500" });
+    mockPatientParse({ pain: 6, needCategory: "CLINICAL" });
+    await POST(formRequest({ From: "+19995551500", To: "+1900", Body: "my pain has gotten a lot worse" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("CLINICAL");
+  });
+
+  it("stores LOGISTICAL for a transportation/appointment message", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551501" });
+    mockPatientParse({ needCategory: "LOGISTICAL" });
+    await POST(formRequest({ From: "+19995551501", To: "+1900", Body: "I can't get to my appointment tomorrow" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("LOGISTICAL");
+  });
+
+  it("stores EMOTIONAL for a distress message with no physical symptom", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551502" });
+    mockPatientParse({ needCategory: "EMOTIONAL" });
+    await POST(formRequest({ From: "+19995551502", To: "+1900", Body: "I'm scared and overwhelmed" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("EMOTIONAL");
+  });
+
+  it("stores FINANCIAL for an affordability message", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551503" });
+    mockPatientParse({ needCategory: "FINANCIAL" });
+    await POST(formRequest({ From: "+19995551503", To: "+1900", Body: "I can't afford this medication" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("FINANCIAL");
+  });
+
+  it("stores ROUTINE for an ordinary check-in", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551504" });
+    mockPatientParse({ needCategory: "ROUTINE" });
+    await POST(formRequest({ From: "+19995551504", To: "+1900", Body: "feeling fine today" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("ROUTINE");
+  });
+
+  it("stores UNCERTAIN for a genuinely ambiguous message rather than forcing a guess", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551505" });
+    mockPatientParse({ needCategory: "UNCERTAIN" });
+    await POST(formRequest({ From: "+19995551505", To: "+1900", Body: "I don't know what to do" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("UNCERTAIN");
+  });
+
+  it("prioritizes CLINICAL for a mixed clinical+logistical message and flags hasAdditionalNeeds", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551506" });
+    mockPatientParse({ pain: 5, needCategory: "CLINICAL", hasAdditionalNeeds: true });
+    await POST(
+      formRequest({
+        From: "+19995551506",
+        To: "+1900",
+        Body: "my pain is worse and I also can't get a ride to my appointment",
+      })
+    );
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("CLINICAL");
+  });
+
+  it("defaults structured numeric reports to CLINICAL without calling the LLM", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551507" });
+    await POST(formRequest({ From: "+19995551507", To: "+1900", Body: "3,2,4,98.6" }));
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.needCategory).toBe("CLINICAL");
+    expect(parsePatientSymptomText).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/twilio/inbound — deterministic safety gate", () => {
   it("fires on explicit crisis language from a patient, bypassing normal symptom parsing", async () => {
     const patient = await seedTestPatient({ phone: "+19995551400" });

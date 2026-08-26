@@ -14,6 +14,7 @@
 // in JSON" prompt instruction.
 
 import OpenAI from "openai";
+import { NEED_CATEGORIES, isNeedCategory, type NeedCategory } from "./needCategory";
 
 const MODEL = "openai/gpt-oss-120b";
 
@@ -75,6 +76,13 @@ export interface ParsedPatientSymptoms {
   fever: number;
   feverMentioned: boolean;
   summary: string;
+  // Routing label only — NOT a clinical decision. The LLM identifies what
+  // kind of need this message represents; lib/needCategory.ts's deterministic
+  // routing decides what happens with that label. Optional so existing
+  // callers/tests that predate this field keep working unmodified — see
+  // recordSymptomLog's default in lib/inbound.ts.
+  needCategory?: NeedCategory;
+  hasAdditionalNeeds?: boolean;
 }
 
 const PATIENT_SYMPTOM_SCHEMA = {
@@ -91,8 +99,18 @@ const PATIENT_SYMPTOM_SCHEMA = {
     },
     feverMentioned: { type: "boolean" },
     summary: { type: "string", description: "One short clinical-style paraphrase of what the patient reported." },
+    needCategory: {
+      type: "string",
+      enum: [...NEED_CATEGORIES],
+      description:
+        "The PRIMARY kind of need this message represents. CLINICAL if it describes a physical symptom (even a mild one, even alongside other needs). LOGISTICAL for appointments/transportation/scheduling problems. EMOTIONAL for fear/distress/overwhelm with no physical symptom described. FINANCIAL for cost/coverage/affordability problems. ROUTINE for a simple check-in with nothing notable. UNCERTAIN if you genuinely cannot tell — do not guess.",
+    },
+    hasAdditionalNeeds: {
+      type: "boolean",
+      description: "True if the message ALSO touches a second, different kind of need beyond the primary needCategory.",
+    },
   },
-  required: ["pain", "nausea", "fatigue", "feverF", "feverMentioned", "summary"],
+  required: ["pain", "nausea", "fatigue", "feverF", "feverMentioned", "summary", "needCategory", "hasAdditionalNeeds"],
   additionalProperties: false,
 } as const;
 
@@ -105,6 +123,12 @@ isn't mentioned at all, assume it is unchanged/mild and score it low (0-2), not 
 If a temperature or fever is mentioned, extract it in Fahrenheit; if the patient explicitly says "no fever," set
 feverF to 98.6 and feverMentioned to true. If fever is not discussed at all, set feverF to 98.6 and feverMentioned
 to false. Never invent a high fever the patient didn't describe.
+
+Also classify needCategory: the primary KIND of need this message represents (CLINICAL, LOGISTICAL, EMOTIONAL,
+FINANCIAL, ROUTINE, or UNCERTAIN — see field description). This is a routing label, not a diagnosis or a clinical
+decision — you are identifying what the message is about, not deciding what should happen. If the patient
+describes ANY physical symptom, even mild, choose CLINICAL even if they also mention something else (set
+hasAdditionalNeeds to true in that case). Prefer UNCERTAIN over guessing when the message is genuinely ambiguous.
 
 The patient's message may be written in English, French, or Spanish (CareSignal serves a Louisiana population that
 includes French and Spanish speakers). Extract the same fields regardless of the message's language. Always write
@@ -141,6 +165,11 @@ export async function parsePatientSymptomText(text: string): Promise<ParsedPatie
     fever: clampFever(parsed.feverF),
     feverMentioned: parsed.feverMentioned,
     summary: parsed.summary,
+    // Defense-in-depth, same spirit as clampScore/clampFever above: never
+    // let an unrecognized value from the model reach the database — fall
+    // back to UNCERTAIN rather than trust an unvalidated string.
+    needCategory: isNeedCategory(parsed.needCategory) ? parsed.needCategory : "UNCERTAIN",
+    hasAdditionalNeeds: Boolean(parsed.hasAdditionalNeeds),
   };
 }
 
@@ -149,6 +178,8 @@ export interface ParsedCaregiverMessage {
   patientSymptoms: ParsedPatientSymptoms | null;
   caregiverCoping: { patientStatus: number; copingScore: number } | null;
   summary: string;
+  needCategory?: NeedCategory;
+  hasAdditionalNeeds?: boolean;
 }
 
 const CAREGIVER_MESSAGE_SCHEMA = {
@@ -177,8 +208,18 @@ const CAREGIVER_MESSAGE_SCHEMA = {
       additionalProperties: false,
     },
     summary: { type: "string" },
+    needCategory: {
+      type: "string",
+      enum: [...NEED_CATEGORIES],
+      description:
+        "The PRIMARY kind of need this message represents, whether about the patient or the caregiver themselves. CLINICAL if a physical symptom is relayed. LOGISTICAL for appointments/transportation/scheduling. EMOTIONAL for fear/distress/overwhelm/burnout with no physical symptom. FINANCIAL for cost/affordability. ROUTINE for a simple check-in. UNCERTAIN if genuinely unclear — do not guess.",
+    },
+    hasAdditionalNeeds: {
+      type: "boolean",
+      description: "True if the message ALSO touches a second, different kind of need beyond the primary needCategory.",
+    },
   },
-  required: ["intent", "patientSymptoms", "caregiverCoping", "summary"],
+  required: ["intent", "patientSymptoms", "caregiverCoping", "summary", "needCategory", "hasAdditionalNeeds"],
   additionalProperties: false,
 } as const;
 
@@ -197,6 +238,12 @@ Decide the intent: PATIENT_SYMPTOMS if only relaying the patient's condition, CA
 their own state, BOTH if the message does both, UNCLEAR if genuinely ambiguous (in which case make your best guess
 for whichever fields you can and set the other to null only if truly not addressed at all). Only fill in
 patientSymptoms or caregiverCoping if that intent applies; otherwise set that field to null.
+
+Also classify needCategory: the primary KIND of need this message represents (CLINICAL, LOGISTICAL, EMOTIONAL,
+FINANCIAL, ROUTINE, or UNCERTAIN — see field description), whether it's about the patient or the caregiver. This
+is a routing label, not a diagnosis or a clinical decision. If any physical symptom is relayed, choose CLINICAL
+even if the message also touches something else (set hasAdditionalNeeds to true in that case). Prefer UNCERTAIN
+over guessing.
 
 The caregiver's message may be written in English, French, or Spanish (CareSignal serves a Louisiana population that
 includes French and Spanish speakers). Extract the same fields regardless of the message's language — watch for the
@@ -242,6 +289,8 @@ export async function parseCaregiverMessageText(text: string): Promise<ParsedCar
         }
       : null,
     summary: parsed.summary,
+    needCategory: isNeedCategory(parsed.needCategory) ? parsed.needCategory : "UNCERTAIN",
+    hasAdditionalNeeds: Boolean(parsed.hasAdditionalNeeds),
   };
 }
 

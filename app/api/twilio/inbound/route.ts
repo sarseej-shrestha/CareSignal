@@ -106,6 +106,7 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         source: "PATIENT_SMS",
         rawSmsText: body,
         parsedByAi: true,
+        needCategory: parsed.needCategory,
       });
       return twiml(riskAckMessage(assessment, lang));
     } catch (err) {
@@ -159,6 +160,7 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         source: "CAREGIVER_SMS",
         rawSmsText: body,
         parsedByAi: true,
+        needCategory: parsed.needCategory,
       });
     }
 
