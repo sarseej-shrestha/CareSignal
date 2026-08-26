@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { computeHospitalizationRisk, hospitalizationFactors } from "@/lib/hospitalizationRisk";
 import { computeClinicalSnapshot } from "@/lib/clinicalSnapshot";
+import { selectAlert } from "@/lib/selectAlert";
 import { DashboardClient, type DashboardPatient } from "./DashboardClient";
 
 export const metadata: Metadata = {
@@ -41,8 +42,9 @@ export default async function DashboardPage({
   const hospResults = await Promise.all(patients.map((p) => computeHospitalizationRisk(p.id)));
 
   const dashboardPatients: DashboardPatient[] = patients.map((p, idx) => {
-    const clinicalAlert = p.alerts.find((a) => a.level === "YELLOW" || a.level === "RED");
-    const burdenAlert = p.alerts.find((a) => a.level === "CAREGIVER_BURDEN");
+    // See lib/selectAlert.ts for why this isn't a plain .find() anymore.
+    const clinicalAlert = selectAlert(p.alerts, (level) => level === "YELLOW" || level === "RED");
+    const burdenAlert = selectAlert(p.alerts, (level) => level === "CAREGIVER_BURDEN");
     // Stays visible through OPEN -> ACKNOWLEDGED so claiming it doesn't make
     // it vanish before it's actually done — only RESOLVED drops it off the
     // active queue (hasOpenCareNeed below reflects the same "not resolved
