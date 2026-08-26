@@ -14,6 +14,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log("Clearing existing data...");
+  await prisma.communicationMessage.deleteMany();
   await prisma.riskAlert.deleteMany();
   await prisma.soapNote.deleteMany();
   await prisma.symptomLog.deleteMany();
