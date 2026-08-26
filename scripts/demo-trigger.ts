@@ -6,6 +6,7 @@
 //   npx tsx scripts/demo-trigger.ts naquin-fever
 //   npx tsx scripts/demo-trigger.ts guidry-divergence
 //   npx tsx scripts/demo-trigger.ts trahan-burden
+//   npx tsx scripts/demo-trigger.ts chauvin-logistical
 //   npx tsx scripts/demo-trigger.ts        (no arg: lists scenario ids)
 
 import { DEMO_SCENARIOS, triggerScenario } from "../lib/demoScenarios";
