@@ -14,6 +14,7 @@ import type { RiskAssessment } from "@/lib/risk";
 import { normalizeLang, t, type Lang } from "@/lib/i18n";
 import { checkSafetyGate } from "@/lib/safetyGate";
 import type { TreatmentFrequency } from "@/lib/transportationResources";
+import type { NeedCategory } from "@/lib/needCategory";
 
 // Twilio computes its request signature against the exact public URL it
 // POSTed to (the webhook URL configured in the Twilio console) — https,
@@ -60,6 +61,21 @@ function riskAckMessage(assessment: RiskAssessment, lang: Lang): string {
   if (assessment.level === "RED") return t("ackRed", lang, { clinicPhone: clinicTriagePhone() });
   if (assessment.level === "YELLOW") return t("ackYellow", lang);
   return t("ackGreen", lang);
+}
+
+// The reply for a non-clinical need (see lib/needCategory.ts) — reflects
+// that the SPECIFIC message was understood, not just "logged" as if it
+// were a routine symptom check-in. CLINICAL and ROUTINE deliberately
+// aren't handled here: CLINICAL always keeps using riskAckMessage() above
+// (the safety-critical pathway, untouched), and ROUTINE already reads
+// fine as a plain "logged" ack. Returns null for those two so the caller
+// falls back to the existing behavior instead of duplicating it.
+function needAckMessage(category: NeedCategory, lang: Lang): string | null {
+  if (category === "LOGISTICAL") return t("ackLogistical", lang);
+  if (category === "EMOTIONAL") return t("ackEmotional", lang);
+  if (category === "FINANCIAL") return t("ackFinancial", lang);
+  if (category === "UNCERTAIN") return t("ackUncertain", lang);
+  return null;
 }
 
 function senderLang(sender: Sender): Lang {
@@ -110,7 +126,8 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         needCategory: parsed.needCategory,
         treatmentFrequency: sender.patient.treatmentFrequency as TreatmentFrequency,
       });
-      return twiml(riskAckMessage(assessment, lang));
+      const needAck = parsed.needCategory ? needAckMessage(parsed.needCategory, lang) : null;
+      return twiml(needAck ?? riskAckMessage(assessment, lang));
     } catch (err) {
       // Covers both a Groq error/timeout (network issue, rate limit, the
       // REQUEST_TIMEOUT_MS budget in lib/ai.ts running out) and a malformed
@@ -187,7 +204,10 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
     }
 
     const parts: string[] = [];
-    if (assessment) parts.push(riskAckMessage(assessment, lang));
+    if (assessment) {
+      const needAck = parsed.needCategory ? needAckMessage(parsed.needCategory, lang) : null;
+      parts.push(needAck ?? riskAckMessage(assessment, lang));
+    }
     if (burdenFlagged) parts.push(t("caregiverBurdenNote", lang));
     if (parts.length === 0) parts.push(t("genericLogged", lang));
     return twiml(parts.join(" "));
