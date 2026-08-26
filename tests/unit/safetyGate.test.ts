@@ -40,4 +40,28 @@ describe("checkSafetyGate", () => {
   it("is case-insensitive", () => {
     expect(checkSafetyGate("I WANT TO DIE").triggered).toBe(true);
   });
+
+  // Semifinal red-team fix: this list was English-only — verified live that
+  // French/Spanish crisis language fell straight through to an ordinary
+  // EMOTIONAL classification. These pin the zero-dependency regex floor;
+  // lib/ai.ts's crisisLanguageDetected field is the second, LLM-based layer
+  // for phrasing these patterns don't cover (see tests/integration/webhook.test.ts).
+  it("triggers on French crisis language", () => {
+    expect(checkSafetyGate("Je veux mourir, je n'en peux plus").triggered).toBe(true);
+    expect(checkSafetyGate("j'en ai marre, je n'en peux plus").triggered).toBe(true);
+    expect(checkSafetyGate("je veux me suicider").triggered).toBe(true);
+  });
+
+  it("triggers on Spanish crisis language, with or without accents", () => {
+    expect(checkSafetyGate("Quiero morir, ya no puedo más").triggered).toBe(true);
+    expect(checkSafetyGate("Quiero morir, ya no puedo mas").triggered).toBe(true);
+    expect(checkSafetyGate("quiero suicidarme").triggered).toBe(true);
+  });
+
+  it("does NOT trigger on ordinary French/Spanish symptom or emotional messages", () => {
+    expect(checkSafetyGate("J'ai beaucoup de douleur aujourd'hui, environ 7 sur 10").triggered).toBe(false);
+    expect(checkSafetyGate("Tengo mucho dolor hoy, un 7 de 10").triggered).toBe(false);
+    expect(checkSafetyGate("J'ai peur et je suis très inquiète pour mon traitement").triggered).toBe(false);
+    expect(checkSafetyGate("Tengo miedo y estoy muy preocupada por mi tratamiento").triggered).toBe(false);
+  });
 });

@@ -560,6 +560,154 @@ describe("POST /api/twilio/inbound — deterministic safety gate", () => {
   });
 });
 
+// Semifinal red-team fix: the deterministic gate above is English/French/
+// Spanish regex, necessarily finite. This second layer piggybacks on the
+// freeform parse call ALREADY made for every non-structured message (no
+// extra Groq call) — the model flags crisisLanguageDetected independently
+// of needCategory, and the webhook route must escalate to the same
+// safety-gate reply regardless of what needCategory or riskAckMessage would
+// otherwise have said. "Uncertainty must never downgrade a potentially
+// dangerous message" — verified here as: even when needCategory is
+// EMOTIONAL (the category this exact gap let a real crisis message fall
+// into), the SAFETY escalation still wins.
+describe("POST /api/twilio/inbound — LLM-based crisis detection (multilingual safety net)", () => {
+  it("escalates a patient message the LLM flags as crisis language, even when needCategory is EMOTIONAL", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551410" });
+    vi.mocked(parsePatientSymptomText).mockResolvedValue({
+      pain: 1,
+      nausea: 1,
+      fatigue: 1,
+      fever: 98.6,
+      feverMentioned: false,
+      summary: "Patient expresses suicidal thoughts",
+      needCategory: "EMOTIONAL",
+      hasAdditionalNeeds: false,
+      crisisLanguageDetected: true,
+    });
+    // Deliberately indirect phrasing the regex gate does NOT match (verified
+    // live during the audit — direct phrases like "veux mourir" are caught
+    // by the regex layer instead; this specifically exercises the LLM layer).
+    const res = await POST(
+      formRequest({ From: "+19995551410", To: "+1900", Body: "Je ne vois plus l'intérêt de continuer tout ça" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("911");
+    expect(xml).toContain("988");
+
+    const safetyAlerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id, level: "SAFETY" } });
+    expect(safetyAlerts).toHaveLength(1);
+    expect(safetyAlerts[0].reasons).toContain("l'intérêt de continuer");
+
+    // The symptom log is still recorded — real data isn't discarded when
+    // the safety layer additionally fires.
+    expect(await prisma.symptomLog.count({ where: { patientId: patient.id } })).toBe(1);
+  });
+
+  it("does NOT escalate when the LLM reports crisisLanguageDetected: false", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551411" });
+    vi.mocked(parsePatientSymptomText).mockResolvedValue({
+      pain: 5,
+      nausea: 2,
+      fatigue: 3,
+      fever: 98.6,
+      feverMentioned: false,
+      summary: "Patient reports moderate pain",
+      needCategory: "CLINICAL",
+      hasAdditionalNeeds: false,
+      crisisLanguageDetected: false,
+    });
+    const res = await POST(formRequest({ From: "+19995551411", To: "+1900", Body: "Tengo dolor, un 5 de 10" }));
+    const xml = await res.text();
+    expect(xml).not.toContain("988");
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id, level: "SAFETY" } })).toBe(0);
+  });
+
+  it("treats a missing crisisLanguageDetected field as false rather than crashing (backward-compatible default)", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551412" });
+    vi.mocked(parsePatientSymptomText).mockResolvedValue({
+      pain: 4,
+      nausea: 1,
+      fatigue: 2,
+      fever: 98.6,
+      feverMentioned: false,
+      summary: "Patient reports mild pain",
+      needCategory: "CLINICAL",
+      hasAdditionalNeeds: false,
+      // crisisLanguageDetected intentionally omitted
+    });
+    const res = await POST(formRequest({ From: "+19995551412", To: "+1900", Body: "mild pain today" }));
+    expect(res.status).toBe(200);
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id, level: "SAFETY" } })).toBe(0);
+  });
+
+  it("escalates a caregiver message the LLM flags as crisis language, even when it doesn't clearly parse as symptoms or coping", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551413" });
+    await seedTestCaregiver(patient.id, { phone: "+19995551414" });
+    vi.mocked(parseCaregiverMessageText).mockResolvedValue({
+      intent: "UNCLEAR",
+      patientSymptoms: null,
+      caregiverCoping: null,
+      summary: "Caregiver expresses wanting to die",
+      needCategory: "EMOTIONAL",
+      hasAdditionalNeeds: false,
+      crisisLanguageDetected: true,
+    });
+    const res = await POST(
+      formRequest({ From: "+19995551414", To: "+1900", Body: "ya no puedo mas con todo esto, quiero morir" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    // Caught by the regex gate directly in this specific case ("quiero
+    // morir" / "ya no puedo mas" are both zero-dependency patterns), but
+    // asserting the end-to-end outcome either way is the point: the patient
+    // (not the caregiver number) gets the SAFETY alert.
+    expect(xml).toContain("911");
+    const safetyAlerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id, level: "SAFETY" } });
+    expect(safetyAlerts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("escalates a caregiver message via the LLM layer specifically (phrasing the regex gate does not cover)", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551415" });
+    await seedTestCaregiver(patient.id, { phone: "+19995551416" });
+    vi.mocked(parseCaregiverMessageText).mockResolvedValue({
+      intent: "CAREGIVER_COPING",
+      patientSymptoms: null,
+      caregiverCoping: { patientStatus: 3, copingScore: 2 },
+      summary: "Caregiver expresses feeling like giving up, indirect crisis language",
+      needCategory: "EMOTIONAL",
+      hasAdditionalNeeds: false,
+      crisisLanguageDetected: true,
+    });
+    const res = await POST(
+      formRequest({ From: "+19995551416", To: "+1900", Body: "I don't see the point in any of this anymore" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("911");
+    const safetyAlerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id, level: "SAFETY" } });
+    expect(safetyAlerts).toHaveLength(1);
+    // Real coping data still recorded, not discarded by the escalation.
+    expect(await prisma.caregiverLog.count()).toBe(1);
+  });
+
+  it("fails conservatively (no crash, existing fallback reply) when the LLM call itself fails on a non-English message", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551417" });
+    vi.mocked(parsePatientSymptomText).mockRejectedValueOnce(new Error("Groq rate limit / unavailable"));
+    const res = await POST(
+      formRequest({ From: "+19995551417", To: "+1900", Body: "no me siento nada bien hoy" })
+    );
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml.length).toBeGreaterThan(0);
+    // No crash, no fabricated SAFETY alert from a failed call, no fabricated
+    // symptom data — the patient gets the existing patientParseFailed
+    // fallback reply and can retry with the structured format.
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id } })).toBe(0);
+    expect(await prisma.symptomLog.count({ where: { patientId: patient.id } })).toBe(0);
+  });
+});
+
 // Every test above runs without TWILIO_AUTH_TOKEN set, which already
 // exercises the "skip validation, demo mode" path on every request (all of
 // them return 200 with no signature header at all). These tests cover the
