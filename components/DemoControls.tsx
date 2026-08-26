@@ -86,7 +86,7 @@ export function DemoControls() {
           Demo fallback (DEMO_MODE)
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Break-glass only — replays a seeded scenario locally if live SMS/AI isn&apos;t available. Live SMS is the
+          Break-glass only. Replays a seeded scenario locally if live SMS/AI isn&apos;t available. Live SMS is the
           primary demo path. Click a button, or press the shortcut shown on it from anywhere on this page.
         </p>
       </CardHeader>

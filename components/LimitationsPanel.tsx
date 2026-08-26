@@ -12,7 +12,7 @@ import { ChevronDown, ChevronUp, ShieldAlert } from "lucide-react";
 // spoken version of each of these points.
 const LIMITATIONS = [
   "Not clinically validated against real patient outcomes.",
-  "Not a diagnostic tool — flags patterns for clinical review, does not determine diagnosis or treatment.",
+  "Not a diagnostic tool. Flags patterns for clinical review, does not determine diagnosis or treatment.",
   "Not a replacement for a clinician's judgment.",
   "Built and trained on simulated data, calibrated to published research patterns.",
   "Requires clinical workflow integration before any real deployment.",
