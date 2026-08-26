@@ -84,6 +84,7 @@ export default async function DashboardPage({
         .reverse()
         .map((log) => ({
           id: log.id,
+          date: log.createdAt.toISOString(),
           dateLabel: formatDateLabel(log.createdAt),
           pain: log.pain,
           nausea: log.nausea,
@@ -103,6 +104,7 @@ export default async function DashboardPage({
               .reverse()
               .map((log) => ({
                 id: log.id,
+                date: log.createdAt.toISOString(),
                 dateLabel: formatDateLabel(log.createdAt),
                 patientStatus: log.patientStatus,
                 copingScore: log.copingScore,

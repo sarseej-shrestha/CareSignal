@@ -64,14 +64,14 @@ async function callTrigger(scenarioId: string): Promise<TriggerResponse> {
 
 function symptomBullets(pain: number, nausea: number, fatigue: number, fever: number): string[] {
   const bullets: string[] = [];
-  if (fever >= 100.4) bullets.push(`Fever — ${fever.toFixed(1)}°F, above the 100.4°F neutropenic threshold`);
-  else if (fever >= 100) bullets.push(`Low-grade fever — ${fever.toFixed(1)}°F`);
-  if (pain >= 6) bullets.push(`Severe pain — ${pain}/10`);
-  else if (pain >= 4) bullets.push(`Elevated pain — ${pain}/10`);
-  if (nausea >= 6) bullets.push(`Severe nausea — ${nausea}/10`);
-  else if (nausea >= 4) bullets.push(`Elevated nausea — ${nausea}/10`);
-  if (fatigue >= 6) bullets.push(`Significant fatigue — ${fatigue}/10`);
-  else if (fatigue >= 4) bullets.push(`Elevated fatigue — ${fatigue}/10`);
+  if (fever >= 100.4) bullets.push(`Fever, ${fever.toFixed(1)}°F, above the 100.4°F neutropenic threshold`);
+  else if (fever >= 100) bullets.push(`Low-grade fever, ${fever.toFixed(1)}°F`);
+  if (pain >= 6) bullets.push(`Severe pain, ${pain}/10`);
+  else if (pain >= 4) bullets.push(`Elevated pain, ${pain}/10`);
+  if (nausea >= 6) bullets.push(`Severe nausea, ${nausea}/10`);
+  else if (nausea >= 4) bullets.push(`Elevated nausea, ${nausea}/10`);
+  if (fatigue >= 6) bullets.push(`Significant fatigue, ${fatigue}/10`);
+  else if (fatigue >= 4) bullets.push(`Elevated fatigue, ${fatigue}/10`);
   if (fever < 100) bullets.push("No fever reported");
   return bullets;
 }
@@ -177,8 +177,8 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
         <CardHeader>
           <CardTitle className="text-base">A patient checks in</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Denise Guidry is on cycle 4 of chemotherapy for lung cancer. She doesn&apos;t use an app or a portal —
-            she just texts CareSignal&apos;s number, in her own words.
+            Denise Guidry is on cycle 4 of chemotherapy for lung cancer. She doesn&apos;t use an app or a portal.
+            She just texts CareSignal&apos;s number, in her own words.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4">
@@ -265,7 +265,7 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
               </div>
               <p className="text-xs text-muted-foreground">
                 Hard clinical rules on their own would only reach <span className="font-medium">{rulesOnlyLevel}</span>
-                {" "}here — no fever, no single reading past a hard threshold. The trained model reads the trend
+                {" "}here. No fever, no single reading past a hard threshold. The trained model reads the trend
                 across her last several check-ins and pushes this to{" "}
                 <span className="font-medium">{result.riskStatus}</span> instead. That escalation only ever goes up,
                 never down, over what the rules alone would say.
@@ -315,7 +315,7 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
                 A second, separate signal
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Denise doesn&apos;t have a caregiver on file. Most symptom trackers stop at the patient —
+                Denise doesn&apos;t have a caregiver on file. Most symptom trackers stop at the patient.
                 CareSignal doesn&apos;t. Here&apos;s a different patient on the same queue, Ruth Trahan, whose
                 daughter Angela checks in on her own channel.
               </p>
@@ -348,7 +348,7 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
                     ))}
                   </ul>
                   <p className="text-xs text-muted-foreground">
-                    This never changes Ruth&apos;s own clinical risk score — it&apos;s tracked, colored, and
+                    This never changes Ruth&apos;s own clinical risk score. It&apos;s tracked, colored, and
                     reasoned about completely separately.
                   </p>
                 </div>
@@ -365,7 +365,7 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   A separate model forecasts hospitalization risk over the next 7 days. Ruth&apos;s caregiver signal
-                  feeds into this forecast too — which is part of why her score is the highest in this seeded
+                  feeds into this forecast too, which is part of why her score is the highest in this seeded
                   panel, even though she doesn&apos;t have the worst symptoms today.
                 </p>
               </CardHeader>
@@ -383,8 +383,8 @@ export function DemoClient({ demoModeEnabled }: { demoModeEnabled: boolean }) {
             <CardHeader>
               <CardTitle className="text-base">Interoperability, if you need it</CardTitle>
               <p className="text-sm text-muted-foreground">
-                CareSignal can package a patient&apos;s record as a FHIR-compatible bundle for a real EHR. Optional
-                — most of the demo doesn&apos;t need this.
+                CareSignal can package a patient&apos;s record as a FHIR-compatible bundle for a real EHR. Optional,
+                most of the demo doesn&apos;t need this.
               </p>
             </CardHeader>
             <CardContent>
