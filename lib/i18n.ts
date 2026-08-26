@@ -47,6 +47,17 @@ const MESSAGES = {
     fr: "Si vous êtes en danger immédiat, appelez le 911 maintenant. Vous pouvez aussi appeler ou texter le 988 (ligne d'aide en cas de crise) à tout moment. Votre équipe de soins a été avertie, et le {{clinicPhone}} est aussi là pour vous.",
     es: "Si está en peligro inmediato, llame al 911 ahora. También puede llamar o enviar un mensaje de texto al 988 (Línea de Crisis y Suicidio) en cualquier momento. Se ha notificado a su equipo de atención, y el {{clinicPhone}} también está para usted.",
   },
+  // Fires when a clinician marks an alert REVIEWED on the dashboard (see
+  // app/api/alerts/[id]/status/route.ts) — deliberately conservative
+  // wording. Does NOT say "responded" (nobody has necessarily replied yet)
+  // and does NOT say "actively monitoring" (no continuous-monitoring
+  // capability exists) — just what actually happened (a human looked at
+  // it) plus the same emergency-call guidance every other ack carries.
+  reviewAcknowledgment: {
+    en: "Your care team has reviewed your message. If you are experiencing an emergency, call 911.",
+    fr: "Votre équipe de soins a examiné votre message. Si vous vivez une urgence, appelez le 911.",
+    es: "Su equipo de atención ha revisado su mensaje. Si tiene una emergencia, llame al 911.",
+  },
   ackYellow: {
     en: "Thanks for the update — logged. Your care team is keeping an eye on your recent symptoms.",
     fr: "Merci pour votre message — c'est enregistré. Votre équipe de soins surveille vos symptômes récents.",
