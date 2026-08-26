@@ -42,7 +42,11 @@ export default async function DashboardPage({
   const dashboardPatients: DashboardPatient[] = patients.map((p, idx) => {
     const clinicalAlert = p.alerts.find((a) => a.level === "YELLOW" || a.level === "RED");
     const burdenAlert = p.alerts.find((a) => a.level === "CAREGIVER_BURDEN");
-    const careNeedAlerts = p.alerts.filter((a) => CARE_NEED_LEVELS.includes(a.level) && a.status === "OPEN");
+    // Stays visible through OPEN -> ACKNOWLEDGED so claiming it doesn't make
+    // it vanish before it's actually done — only RESOLVED drops it off the
+    // active queue (hasOpenCareNeed below reflects the same "not resolved
+    // yet" definition, not just "brand new").
+    const careNeedAlerts = p.alerts.filter((a) => CARE_NEED_LEVELS.includes(a.level) && a.status !== "RESOLVED");
     const hosp = hospResults[idx];
 
     return {
@@ -62,6 +66,8 @@ export default async function DashboardPage({
       hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
       hospitalizationHasRecentHistory: hosp.hasRecentHistory,
       reasons: clinicalAlert ? (JSON.parse(clinicalAlert.reasons) as string[]) : [],
+      clinicalAlertId: clinicalAlert?.id ?? null,
+      clinicalAlertStatus: clinicalAlert?.status ?? null,
       logs: p.symptomLogs.map((log) => ({
         date: log.createdAt.toISOString(),
         label: formatDateLabel(log.createdAt),
@@ -104,6 +110,8 @@ export default async function DashboardPage({
           }
         : null,
       caregiverBurdenReasons: burdenAlert ? (JSON.parse(burdenAlert.reasons) as string[]) : null,
+      burdenAlertId: burdenAlert?.id ?? null,
+      burdenAlertStatus: burdenAlert?.status ?? null,
       careNeeds: careNeedAlerts.map((a) => ({
         id: a.id,
         category: a.level,

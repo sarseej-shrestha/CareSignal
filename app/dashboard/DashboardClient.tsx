@@ -8,6 +8,7 @@ import { PatientRiskTable, type QueuePatient } from "@/components/PatientRiskTab
 import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendChart";
 import { RiskBadge } from "@/components/RiskBadge";
 import { CareNeedBadge } from "@/components/CareNeedBadge";
+import { AlertStatusControl } from "@/components/AlertStatusControl";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
 import { LimitationsPanel } from "@/components/LimitationsPanel";
@@ -48,6 +49,10 @@ export interface DashboardPatient extends QueuePatient {
     logs: CaregiverLogView[];
   } | null;
   caregiverBurdenReasons: string[] | null;
+  clinicalAlertId: string | null;
+  clinicalAlertStatus: string | null;
+  burdenAlertId: string | null;
+  burdenAlertStatus: string | null;
   // Non-clinical needs (LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN/SAFETY),
   // routed outside the clinical risk score — see lib/needCategory.ts and
   // lib/safetyGate.ts. Never blended into riskStatus/riskScore.
@@ -149,7 +154,12 @@ export function DashboardClient({
               <div className="flex flex-col gap-3 sm:flex-row">
                 {selected.reasons.length > 0 && (
                   <div className="rounded-lg border bg-muted/30 p-3 sm:flex-1">
-                    <div className="mb-1.5 text-xs font-medium text-muted-foreground">Why this risk level</div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">Why this risk level</span>
+                      {selected.clinicalAlertId && selected.clinicalAlertStatus && (
+                        <AlertStatusControl alertId={selected.clinicalAlertId} status={selected.clinicalAlertStatus} />
+                      )}
+                    </div>
                     <ul className="list-disc space-y-0.5 pl-5 text-sm">
                       {selected.reasons.map((r) => (
                         <li key={r}>{r}</li>
@@ -159,9 +169,14 @@ export function DashboardClient({
                 )}
                 {selected.caregiverBurdenReasons && (
                   <div className="rounded-lg border border-[var(--viz-caregiver-burden)]/30 bg-[var(--viz-caregiver-burden)]/5 p-3 sm:flex-1">
-                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[var(--viz-caregiver-burden)]">
-                      <HeartHandshake className="size-3.5" />
-                      Why caregiver burden is flagged
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--viz-caregiver-burden)]">
+                        <HeartHandshake className="size-3.5" />
+                        Why caregiver burden is flagged
+                      </span>
+                      {selected.burdenAlertId && selected.burdenAlertStatus && (
+                        <AlertStatusControl alertId={selected.burdenAlertId} status={selected.burdenAlertStatus} />
+                      )}
                     </div>
                     <ul className="list-disc space-y-0.5 pl-5 text-sm">
                       {selected.caregiverBurdenReasons.map((r) => (
@@ -186,10 +201,11 @@ export function DashboardClient({
                 {selected.careNeeds.map((need) => (
                   <div key={need.id} className="rounded-lg border p-3">
                     <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                      <CareNeedBadge category={need.category} />
-                      <span className="text-xs text-muted-foreground">
-                        {need.dateLabel} · {need.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <CareNeedBadge category={need.category} />
+                        <span className="text-xs text-muted-foreground">{need.dateLabel}</span>
+                      </div>
+                      <AlertStatusControl alertId={need.id} status={need.status} />
                     </div>
                     <ul className="list-disc space-y-0.5 pl-5 text-sm">
                       {need.reasons.map((r) => (
