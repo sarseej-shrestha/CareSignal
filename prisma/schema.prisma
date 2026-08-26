@@ -28,6 +28,7 @@ model Patient {
   symptomLogs SymptomLog[]
   alerts      RiskAlert[]
   soapNotes   SoapNote[]
+  communications CommunicationMessage[]
   createdAt   DateTime     @default(now())
 }
 
@@ -75,8 +76,55 @@ model RiskAlert {
   level     String // YELLOW, RED, CAREGIVER_BURDEN
   reasons   String // JSON array of human-readable reasons
   modelProb Float? // classifier output, if applicable
-  status    String   @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED
+  // OPEN -> REVIEWED -> ACTIONED -> RESOLVED. Was OPEN/ACKNOWLEDGED/RESOLVED
+  // (a plain string column, not a real enum, so renaming ACKNOWLEDGED ->
+  // REVIEWED is a value change, not a migration) — extended for the
+  // closed-loop communication feature: REVIEWED means a clinician looked at
+  // it (was "Claimed"), ACTIONED means a clinician took a concrete action
+  // (currently: sent an outbound reply — see lib/communications.ts), and
+  // neither implies RESOLVED. Communication is not the same thing as
+  // resolution; only an explicit "Resolve" sets RESOLVED. See
+  // app/api/alerts/[id]/status/route.ts.
+  status    String   @default("OPEN")
   createdAt DateTime @default(now())
+}
+
+// A generic communication log — one table for every direction/participant
+// combination (patient-in, patient-out, caregiver-in, caregiver-out) rather
+// than separate PatientMessage/CaregiverMessage/NurseMessage tables. This is
+// NOT a new pipeline: inbound rows are written by the EXISTING
+// recordSymptomLog/recordSafetyAlert/recordCaregiverLog functions
+// (lib/inbound.ts) as an additional persistence step alongside what they
+// already do — the safety/risk/need-routing logic in those functions is
+// completely unmodified. Outbound rows are written by lib/communications.ts.
+//
+// relatedAlertId is a loose reference (no FK relation), matching this
+// codebase's existing pattern for cross-references that outlive the thing
+// they point to (e.g. SoapNote.sourceLogs) — an alert's lifecycle (status
+// changes, but rows are never deleted) doesn't need to be constrained by a
+// hard relation for this to stay meaningful.
+model CommunicationMessage {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  participant String // "PATIENT" | "CAREGIVER" — who the human side of this message is, independent of direction
+  direction   String // "INBOUND" | "OUTBOUND"
+  body        String
+  // RECEIVED (always the value for inbound) | SENT | FAILED (outbound only —
+  // never "SENT" unless Twilio actually accepted it; see lib/twilioClient.ts)
+  status      String   @default("RECEIVED")
+  relatedAlertId String? // the RiskAlert/need this message relates to, if known — see comment above
+  // Self-reported, NOT authenticated identity — this application has no
+  // clinician login/session system (see docs/pitch-notes.md's security
+  // scope note). A clinician types their own name when sending; nothing
+  // verifies it. Honest about what it is: an audit-trail convenience, not
+  // access control.
+  sentByName  String?
+  // Twilio's message SID, only set on an actually-accepted OUTBOUND send —
+  // provenance only. No delivery-status webhook is implemented, so this
+  // does not mean "delivered," only "Twilio accepted the send request."
+  twilioSid   String?
+  createdAt   DateTime @default(now())
 }
 
 // SOAP notes are their own first-class entity, not a field bolted onto

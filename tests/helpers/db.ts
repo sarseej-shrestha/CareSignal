@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 
 export async function resetDb() {
+  await prisma.communicationMessage.deleteMany();
   await prisma.riskAlert.deleteMany();
   await prisma.soapNote.deleteMany();
   await prisma.symptomLog.deleteMany();
@@ -41,6 +42,7 @@ interface CaregiverOverrides {
   lastName?: string;
   phone?: string;
   relationship?: string;
+  preferredLanguage?: string;
 }
 
 export async function seedTestCaregiver(patientId: string, overrides: CaregiverOverrides = {}) {
