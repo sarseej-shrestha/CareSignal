@@ -47,6 +47,12 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     description:
       "Resets Angela's (Ruth's daughter) check-in history, then replays the coping check-in that flags caregiver burnout — separate from Ruth's own clinical risk.",
   },
+  {
+    id: "chauvin-logistical",
+    label: "James Chauvin — logistical need",
+    description:
+      "Replays a real human message about a transportation problem — CareSignal routes it as a non-clinical need instead of a symptom report, and flags treatment-interruption risk given his real weekly treatment schedule.",
+  },
 ];
 
 function isDemoModeEnabled(): boolean {
@@ -144,6 +150,41 @@ async function triggerFinalSymptomLog(patientId: string, seed: SeedPatient) {
   });
 }
 
+// James Chauvin's own clinical check-in history is untouched — this only
+// appends one new, real human message and lets the real need-routing
+// pipeline (lib/needCategory.ts / lib/inbound.ts) classify and route it,
+// exactly as a live SMS would. Idempotent: deletes any prior LOGISTICAL
+// alert for him first, so re-triggering during rehearsal doesn't pile up
+// duplicates.
+const LOGISTICAL_DEMO_MESSAGE =
+  "I don't think I can make it to treatment this week, my ride fell through and I don't know what to do";
+
+async function triggerLogisticalNeedScenario(seed: SeedPatient) {
+  const patient = await ensurePatient(seed);
+  await prisma.riskAlert.deleteMany({ where: { patientId: patient.id, level: "LOGISTICAL" } });
+
+  const latest = seed.logs[seed.logs.length - 1];
+  await recordSymptomLog({
+    patientId: patient.id,
+    pain: latest.pain,
+    nausea: latest.nausea,
+    fatigue: latest.fatigue,
+    fever: latest.fever,
+    source: "PATIENT_SMS",
+    rawSmsText: LOGISTICAL_DEMO_MESSAGE,
+    parsedByAi: true,
+    needCategory: "LOGISTICAL",
+    treatmentFrequency: seed.treatmentFrequency,
+  });
+
+  const alert = await prisma.riskAlert.findFirst({
+    where: { patientId: patient.id, level: "LOGISTICAL" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { patient, alert };
+}
+
 async function triggerCaregiverBurdenScenario(seed: SeedPatient) {
   if (!seed.caregiver) throw new Error(`Seed patient ${seed.mrn} has no caregiver to replay.`);
 
@@ -201,6 +242,12 @@ export interface ScenarioResult {
   hospitalizationRiskScore?: number;
   hospitalizationRiskFactors?: string[];
   hospitalizationHasRecentHistory?: boolean;
+  // Present for chauvin-logistical — the real LOGISTICAL care-need alert
+  // reasons (see lib/needCategory.ts / lib/inbound.ts), including the
+  // treatment-interruption note when the patient's real treatment
+  // frequency warrants it (lib/treatmentInterruptionRisk.ts).
+  careNeedCategory?: string;
+  careNeedReasons?: string[];
 }
 
 export async function triggerScenario(scenarioId: string): Promise<ScenarioResult> {
@@ -258,6 +305,19 @@ export async function triggerScenario(scenarioId: string): Promise<ScenarioResul
         hospitalizationRiskScore: hosp.score,
         hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
         hospitalizationHasRecentHistory: hosp.hasRecentHistory,
+      };
+    }
+    case "chauvin-logistical": {
+      const seed = findSeedPatient("OCH-70147");
+      const { patient, alert } = await triggerLogisticalNeedScenario(seed);
+      const reasons = alert ? (JSON.parse(alert.reasons) as string[]) : [];
+      return {
+        scenarioId,
+        patientId: patient.id,
+        patientName: `${seed.firstName} ${seed.lastName}`,
+        summary: "Logistical need flagged and routed to the care team — not treated as a clinical symptom report.",
+        careNeedCategory: "LOGISTICAL",
+        careNeedReasons: reasons,
       };
     }
     default:
