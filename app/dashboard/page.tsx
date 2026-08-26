@@ -24,6 +24,10 @@ function formatDateLabel(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function formatDateTimeLabel(d: Date): string {
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -35,6 +39,7 @@ export default async function DashboardPage({
       symptomLogs: { orderBy: { createdAt: "asc" } },
       caregiver: { include: { caregiverLogs: { orderBy: { createdAt: "asc" } } } },
       alerts: { orderBy: { createdAt: "desc" } },
+      communications: { orderBy: { createdAt: "asc" } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -130,6 +135,26 @@ export default async function DashboardPage({
         status: a.status,
         dateLabel: formatDateLabel(a.createdAt),
       })),
+      communications: p.communications.map((m) => ({
+        id: m.id,
+        participant: m.participant as "PATIENT" | "CAREGIVER",
+        direction: m.direction as "INBOUND" | "OUTBOUND",
+        body: m.body,
+        status: m.status,
+        sentByName: m.sentByName,
+        dateLabel: formatDateTimeLabel(m.createdAt),
+      })),
+      // Whichever participant most recently texted IN — the sensible
+      // default for "who is this reply to" (see components/ReplyComposer.tsx),
+      // overridable by the clinician via its own toggle when a caregiver
+      // exists. Falls back to PATIENT when there's no inbound history yet.
+      lastInboundParticipant:
+        p.communications
+          .slice()
+          .reverse()
+          .find((m) => m.direction === "INBOUND")?.participant === "CAREGIVER"
+          ? "CAREGIVER"
+          : "PATIENT",
     };
   });
 

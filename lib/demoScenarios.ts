@@ -53,6 +53,18 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     description:
       "Replays a real human message about a transportation problem — CareSignal routes it as a non-clinical need instead of a symptom report, and flags treatment-interruption risk given his real weekly treatment schedule.",
   },
+  {
+    id: "pitre-pain-report",
+    label: "Anthony Pitre — pain report (closed-loop start)",
+    description:
+      "Resets Anthony to baseline and replays his opening message. The start of the closed-loop demo: mark it reviewed, reply, then trigger pitre-pain-followup to simulate his reply.",
+  },
+  {
+    id: "pitre-pain-followup",
+    label: "Anthony Pitre — pain worsens (simulated reply)",
+    description:
+      "Simulates Anthony texting back after a clinician's question — appends one check-in through the real pipeline without resetting whatever review/reply progress the rehearsal has already reached.",
+  },
 ];
 
 function isDemoModeEnabled(): boolean {
@@ -232,6 +244,61 @@ async function triggerCaregiverBurdenScenario(seed: SeedPatient) {
   return { patient, ...result };
 }
 
+// Closed-loop communication demo (see docs on app/api/communications/send/route.ts).
+// Deliberately hardcoded messages, not operator-typed freeform text — this
+// keeps the whole scenario Groq-free, matching the "must not call Groq
+// unnecessarily" requirement, the same way every other scenario in this
+// file avoids it by using pre-computed values instead of calling
+// parsePatientSymptomText.
+const PITRE_INITIAL_MESSAGE = "I've been having a lot of pain since last night and I'm worried.";
+const PITRE_FOLLOWUP_MESSAGE = "I'm worse now. It's about 8 out of 10.";
+
+async function triggerPitrePainReportScenario(seed: SeedPatient) {
+  const patient = await resetSymptomPatientBeforeFinalLog(seed);
+  // resetSymptomPatientBeforeFinalLog only clears alerts/symptom logs (the
+  // three scenarios that already used it don't have a communication history
+  // to worry about resetting) — this scenario is the "start" of a rehearsable
+  // multi-step demo, so it additionally clears any conversation history from
+  // a PRIOR full rehearsal (reviewed/replied/resolved), so re-triggering
+  // this always lands back on a clean OPEN state with an empty thread.
+  await prisma.communicationMessage.deleteMany({ where: { patientId: patient.id } });
+  const assessment = await recordSymptomLog({
+    patientId: patient.id,
+    pain: 7,
+    nausea: 2,
+    fatigue: 4,
+    fever: 98.6,
+    source: "PATIENT_SMS",
+    rawSmsText: PITRE_INITIAL_MESSAGE,
+    parsedByAi: true,
+    needCategory: "CLINICAL",
+  });
+  return { patient, assessment };
+}
+
+// Deliberately does NOT reset anything else — this must layer onto whatever
+// review/reply state the rehearsal has already reached, simulating "the
+// patient replies" at whatever point in the demo it's triggered. Idempotent
+// the same way chauvin-logistical is: delete any prior copy of this exact
+// message before re-inserting, so repeated triggering during rehearsal
+// doesn't accumulate duplicate log rows.
+async function triggerPitrePainFollowupScenario(seed: SeedPatient) {
+  const patient = await ensurePatient(seed);
+  await prisma.symptomLog.deleteMany({ where: { patientId: patient.id, rawSmsText: PITRE_FOLLOWUP_MESSAGE } });
+  const assessment = await recordSymptomLog({
+    patientId: patient.id,
+    pain: 8,
+    nausea: 2,
+    fatigue: 4,
+    fever: 98.6,
+    source: "PATIENT_SMS",
+    rawSmsText: PITRE_FOLLOWUP_MESSAGE,
+    parsedByAi: true,
+    needCategory: "CLINICAL",
+  });
+  return { patient, assessment };
+}
+
 export interface ScenarioResult {
   scenarioId: string;
   patientId: string;
@@ -327,6 +394,32 @@ export async function triggerScenario(scenarioId: string): Promise<ScenarioResul
         summary: "Logistical need flagged and routed to the care team — not treated as a clinical symptom report.",
         careNeedCategory: "LOGISTICAL",
         careNeedReasons: reasons,
+      };
+    }
+    case "pitre-pain-report": {
+      const seed = findSeedPatient("OCH-70145");
+      const { patient, assessment } = await triggerPitrePainReportScenario(seed);
+      return {
+        scenarioId,
+        patientId: patient.id,
+        patientName: `${seed.firstName} ${seed.lastName}`,
+        summary: `Pain report logged — risk at ${assessment.level} (p=${assessment.modelProb.toFixed(2)}). Ready to review and reply.`,
+        riskStatus: assessment.level,
+        riskScore: assessment.modelProb,
+        reasons: assessment.reasons,
+      };
+    }
+    case "pitre-pain-followup": {
+      const seed = findSeedPatient("OCH-70145");
+      const { patient, assessment } = await triggerPitrePainFollowupScenario(seed);
+      return {
+        scenarioId,
+        patientId: patient.id,
+        patientName: `${seed.firstName} ${seed.lastName}`,
+        summary: `Simulated reply logged — risk now ${assessment.level} (p=${assessment.modelProb.toFixed(2)}).`,
+        riskStatus: assessment.level,
+        riskScore: assessment.modelProb,
+        reasons: assessment.reasons,
       };
     }
     default:

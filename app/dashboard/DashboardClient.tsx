@@ -11,6 +11,8 @@ import type { UnifiedNeed } from "@/lib/needPresentation";
 import { sortNeeds } from "@/lib/needPresentation";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { TranslateMessage } from "@/components/TranslateMessage";
+import { CommunicationThread, type CommunicationMessageView } from "@/components/CommunicationThread";
+import { ReplyComposer } from "@/components/ReplyComposer";
 import { DemoControls } from "@/components/DemoControls";
 import { LimitationsPanel } from "@/components/LimitationsPanel";
 import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
@@ -69,6 +71,8 @@ export interface DashboardPatient extends QueuePatient {
   // never merged into riskStatus/riskScore.
   hospitalizationRiskFactors: string[];
   hospitalizationHasRecentHistory: boolean;
+  communications: CommunicationMessageView[];
+  lastInboundParticipant: "PATIENT" | "CAREGIVER";
 }
 
 interface TimelineEntry {
@@ -330,6 +334,30 @@ export function DashboardClient({
                 No open needs for {selected.firstName} right now.
               </p>
             )}
+
+            {/* Closed-loop communication — the conversation so far, then a
+                composer to reply. A reply is tied to whichever active need is
+                currently highest-priority (if any), so sending it can advance
+                that need to ACTIONED (see app/api/communications/send/route.ts)
+                — sending with no active need just records the message with
+                no status side effect. This never touches the safety/risk
+                pipeline: an inbound reply here is not a different code path
+                from any other inbound SMS, it's the exact same webhook. */}
+            <div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Communication
+              </div>
+              <div className="flex flex-col gap-3">
+                <CommunicationThread messages={selected.communications} />
+                <ReplyComposer
+                  patientId={selected.id}
+                  patientName={selected.firstName}
+                  caregiverName={selected.caregiver?.firstName ?? null}
+                  relatedAlertId={activeNeeds[0]?.id ?? null}
+                  defaultParticipant={selected.lastInboundParticipant}
+                />
+              </div>
+            </div>
 
             {/* Progressive disclosure — everything above is enough to decide
                 what to do next. Supporting context, documentation, and the
