@@ -60,6 +60,11 @@ export default async function DashboardPage({
       parish: p.parish,
       cancerType: p.cancerType,
       chemoCycle: p.chemoCycle,
+      // Reused as-is from the existing outbound-SMS language field
+      // (lib/i18n.ts) — not a new detection system. Only drives whether the
+      // clinician-facing "Translate to English" control renders on the
+      // "what happened" card; see components/TranslateMessage.tsx.
+      preferredLanguage: p.preferredLanguage,
       treatmentFrequency: p.treatmentFrequency as "weekly" | "every_2_weeks" | "every_3_weeks" | "monthly",
       riskStatus: p.riskStatus as "GREEN" | "YELLOW" | "RED",
       riskScore: p.riskScore,

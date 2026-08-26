@@ -454,3 +454,65 @@ ${context.caregiverBurdenNote ? `Caregiver note: ${context.caregiverBurdenNote}`
     fullText,
   };
 }
+
+// --- Clinician-facing English translation ---
+// On-demand only — the clinician clicks "Translate to English" on a specific
+// message; this is NEVER called as part of inbound SMS processing. That
+// pipeline (checkSafetyGate -> parsePatientSymptomText/parseCaregiverMessageText
+// above) is untouched by this function and doesn't know it exists. Purely a
+// clinician-presentation layer on top of a message that's already been
+// safely triaged — see app/api/ai/translate/route.ts and
+// components/TranslateMessage.tsx for the rest of this feature.
+export interface ClinicianTranslation {
+  translation: string;
+  aiGenerated: true;
+}
+
+const TRANSLATION_SCHEMA = {
+  type: "object",
+  properties: {
+    translation: {
+      type: "string",
+      description: "The faithful English translation only, no commentary, no preamble.",
+    },
+  },
+  required: ["translation"],
+  additionalProperties: false,
+} as const;
+
+// The exact instructions requested for this feature — faithful, literal
+// translation for a clinician who doesn't speak the patient's language,
+// deliberately NOT a paraphrase or clinical interpretation (that's already
+// what parsePatientSymptomText/parseCaregiverMessageText produce, from the
+// ORIGINAL text, before this function is ever involved).
+const TRANSLATION_SYSTEM_PROMPT = `You are translating a patient's message for a medical professional.
+
+Translate faithfully into English. Do not summarize. Do not interpret. Do not diagnose. Do not add context.
+Preserve negations. Preserve symptom severity and quantities. Preserve dates and time references. Preserve
+uncertainty. Preserve emotional meaning. Preserve medical terminology. If the original is ambiguous, preserve the
+ambiguity rather than resolving it yourself.
+
+If the message is already in English, return it unchanged.`;
+
+export async function translateForClinician(text: string): Promise<ClinicianTranslation> {
+  const openai = getClient();
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: TRANSLATION_SYSTEM_PROMPT },
+      { role: "user", content: text },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "clinician_translation", strict: true, schema: TRANSLATION_SCHEMA },
+    },
+    temperature: 0,
+    max_tokens: MAX_COMPLETION_TOKENS,
+  });
+
+  const raw = completion.choices[0]?.message?.content;
+  if (!raw) throw new Error("Model returned no content for translation.");
+  const parsed = JSON.parse(raw);
+
+  return { translation: parsed.translation, aiGenerated: true };
+}

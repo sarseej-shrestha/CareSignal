@@ -10,6 +10,7 @@ import { NeedCard } from "@/components/NeedCard";
 import type { UnifiedNeed } from "@/lib/needPresentation";
 import { sortNeeds } from "@/lib/needPresentation";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
+import { TranslateMessage } from "@/components/TranslateMessage";
 import { DemoControls } from "@/components/DemoControls";
 import { LimitationsPanel } from "@/components/LimitationsPanel";
 import { HospitalizationRiskPanel } from "@/components/HospitalizationRiskPanel";
@@ -31,6 +32,7 @@ interface CaregiverLogView {
 }
 
 export interface DashboardPatient extends QueuePatient {
+  preferredLanguage: string;
   treatmentFrequency: TreatmentFrequency;
   reasons: string[];
   logs: TrendPoint[];
@@ -237,10 +239,25 @@ export function DashboardClient({
                     />
                   </div>
                   {selected.clinicalSnapshot.latestRawText && (
-                    <p className="mb-2 flex items-start gap-1.5 text-sm text-foreground/90">
-                      <MessageCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                      &ldquo;{selected.clinicalSnapshot.latestRawText}&rdquo;
-                    </p>
+                    <div className="mb-2">
+                      <p className="flex items-start gap-1.5 text-sm text-foreground/90">
+                        <MessageCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                        &ldquo;{selected.clinicalSnapshot.latestRawText}&rdquo;
+                      </p>
+                      {/* Clinician-facing translation, on demand only — never
+                          shown for an already-English message (no LLM call
+                          wasted on a translation that adds no value). Uses
+                          the same preferredLanguage field lib/i18n.ts already
+                          relies on for outbound SMS, not a new detection
+                          system, and isn't expected to be perfect — a
+                          preferredLanguage="en" patient who occasionally
+                          texts in Spanish just won't see the button, which
+                          is a UX tradeoff, not a safety one: the original
+                          text is always shown regardless. */}
+                      {selected.preferredLanguage !== "en" && (
+                        <TranslateMessage text={selected.clinicalSnapshot.latestRawText} />
+                      )}
+                    </div>
                   )}
                   {selected.clinicalSnapshot.deltas ? (
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
