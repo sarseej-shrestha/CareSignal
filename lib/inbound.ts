@@ -9,6 +9,7 @@ import { computeHospitalizationRisk } from "./hospitalizationRisk";
 import type { NeedCategory } from "./needCategory";
 import type { TreatmentFrequency } from "./transportationResources";
 import { checkTreatmentInterruptionRisk } from "./treatmentInterruptionRisk";
+import { recordInboundCommunication } from "./communications";
 
 export type LogSource = "PATIENT_SMS" | "CAREGIVER_SMS" | "WEB";
 
@@ -70,6 +71,8 @@ export async function recordSymptomLog(params: {
   // no action required" (see lib/needCategory.ts) — everything else
   // (LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN) surfaces on the same queue a
   // clinical alert would, routed by category instead of severity.
+  let createdAlertId: string | null = null;
+
   if (needCategory !== "CLINICAL" && needCategory !== "ROUTINE" && params.rawSmsText) {
     const reasons = [`Message: "${params.rawSmsText}"`];
 
@@ -78,7 +81,7 @@ export async function recordSymptomLog(params: {
       if (interruption.atRisk && interruption.reason) reasons.push(interruption.reason);
     }
 
-    await prisma.riskAlert.create({
+    const needAlert = await prisma.riskAlert.create({
       data: {
         patientId: params.patientId,
         level: needCategory,
@@ -87,6 +90,7 @@ export async function recordSymptomLog(params: {
         status: "OPEN",
       },
     });
+    createdAlertId = needAlert.id;
   }
 
   const logs = await prisma.symptomLog.findMany({
@@ -108,7 +112,7 @@ export async function recordSymptomLog(params: {
   });
 
   if (assessment.level === "YELLOW" || assessment.level === "RED") {
-    await prisma.riskAlert.create({
+    const clinicalAlert = await prisma.riskAlert.create({
       data: {
         patientId: params.patientId,
         level: assessment.level,
@@ -117,6 +121,7 @@ export async function recordSymptomLog(params: {
         status: "OPEN",
       },
     });
+    createdAlertId = clinicalAlert.id;
   }
 
   // Separate model, separate time horizon — recomputed alongside the daily
@@ -124,6 +129,15 @@ export async function recordSymptomLog(params: {
   // built from) but never merged into riskStatus/riskScore above.
   const hosp = await computeHospitalizationRisk(params.patientId);
   await prisma.patient.update({ where: { id: params.patientId }, data: { hospitalizationRiskScore: hosp.score } });
+
+  // Conversation-log mirror only — see lib/communications.ts's file header.
+  // Does not affect the assessment already computed and returned above.
+  await recordInboundCommunication({
+    patientId: params.patientId,
+    participant: params.source === "CAREGIVER_SMS" ? "CAREGIVER" : "PATIENT",
+    body: params.rawSmsText,
+    relatedAlertId: createdAlertId,
+  });
 
   return assessment;
 }
@@ -137,7 +151,7 @@ export async function recordSymptomLog(params: {
 // trend chart. A plain RiskAlert with the real quoted text is honest about
 // what this actually is.
 export async function recordSafetyAlert(params: { patientId: string; rawSmsText: string; reason: string }) {
-  return prisma.riskAlert.create({
+  const alert = await prisma.riskAlert.create({
     data: {
       patientId: params.patientId,
       level: "SAFETY",
@@ -146,6 +160,18 @@ export async function recordSafetyAlert(params: { patientId: string; rawSmsText:
       status: "OPEN",
     },
   });
+
+  // Always PATIENT here, matching the comment above this function — a
+  // caregiver relaying crisis language is still about the patient's safety,
+  // and the alert itself already attaches to the patient's record.
+  await recordInboundCommunication({
+    patientId: params.patientId,
+    participant: "PATIENT",
+    body: params.rawSmsText,
+    relatedAlertId: alert.id,
+  });
+
+  return alert;
 }
 
 export async function recordCaregiverLog(params: {
@@ -165,6 +191,7 @@ export async function recordCaregiverLog(params: {
   });
 
   let burdenFlagged = false;
+  let createdAlertId: string | null = null;
 
   if (params.copingScore <= 2) {
     const recentLogs = await prisma.caregiverLog.findMany({
@@ -174,7 +201,7 @@ export async function recordCaregiverLog(params: {
     });
     const lowCount = recentLogs.filter((l) => l.copingScore <= 2).length;
 
-    await prisma.riskAlert.create({
+    const burdenAlert = await prisma.riskAlert.create({
       data: {
         patientId: params.patientId,
         level: "CAREGIVER_BURDEN",
@@ -188,6 +215,7 @@ export async function recordCaregiverLog(params: {
     });
 
     burdenFlagged = true;
+    createdAlertId = burdenAlert.id;
   }
 
   // Every caregiver check-in changes the hospitalization model's rolling
@@ -202,6 +230,13 @@ export async function recordCaregiverLog(params: {
   // test that pins this down.
   const hosp = await computeHospitalizationRisk(params.patientId);
   await prisma.patient.update({ where: { id: params.patientId }, data: { hospitalizationRiskScore: hosp.score } });
+
+  await recordInboundCommunication({
+    patientId: params.patientId,
+    participant: "CAREGIVER",
+    body: params.rawSmsText,
+    relatedAlertId: createdAlertId,
+  });
 
   return { burdenFlagged };
 }
