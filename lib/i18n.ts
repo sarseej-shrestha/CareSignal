@@ -37,6 +37,16 @@ const MESSAGES = {
     fr: "Cela nécessite une attention médicale rapide. Veuillez appeler le {{clinicPhone}} maintenant, ou le 911 en cas d'urgence. Un membre de votre équipe de soins a également été averti.",
     es: "Esto requiere atención médica pronta. Por favor llame al {{clinicPhone}} ahora, o al 911 si esto se siente como una emergencia. También se ha notificado a un miembro de su equipo de atención.",
   },
+  // Fires from the deterministic crisis-language safety gate (lib/safetyGate.ts),
+  // BEFORE any LLM parsing runs — not an AI-generated reply. Points to real,
+  // existing national crisis resources (988 Suicide & Crisis Lifeline, 911)
+  // rather than any clinical instruction. {{clinicPhone}} resolved the same
+  // way as ackRed.
+  safetyGate: {
+    en: "If you are in immediate danger, please call 911 now. You can also call or text 988 (Suicide & Crisis Lifeline) any time. Your care team has been notified and {{clinicPhone}} is there for you too.",
+    fr: "Si vous êtes en danger immédiat, appelez le 911 maintenant. Vous pouvez aussi appeler ou texter le 988 (ligne d'aide en cas de crise) à tout moment. Votre équipe de soins a été avertie, et le {{clinicPhone}} est aussi là pour vous.",
+    es: "Si está en peligro inmediato, llame al 911 ahora. También puede llamar o enviar un mensaje de texto al 988 (Línea de Crisis y Suicidio) en cualquier momento. Se ha notificado a su equipo de atención, y el {{clinicPhone}} también está para usted.",
+  },
   ackYellow: {
     en: "Thanks for the update — logged. Your care team is keeping an eye on your recent symptoms.",
     fr: "Merci pour votre message — c'est enregistré. Votre équipe de soins surveille vos symptômes récents.",
