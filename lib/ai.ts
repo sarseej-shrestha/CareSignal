@@ -83,6 +83,19 @@ export interface ParsedPatientSymptoms {
   // recordSymptomLog's default in lib/inbound.ts.
   needCategory?: NeedCategory;
   hasAdditionalNeeds?: boolean;
+  // Semifinal red-team fix: lib/safetyGate.ts's deterministic regex list is
+  // English/French/Spanish but necessarily finite — it can't catch every
+  // paraphrase or indirect phrasing. This field lets the model, which
+  // already understands crisis language across all three languages
+  // (verified live during the audit — French/Spanish suicidal-ideation
+  // messages were correctly summarized as such, just never acted on),
+  // flag it explicitly instead of that recognition being silently
+  // discarded into an ordinary EMOTIONAL classification. This is a SECOND,
+  // redundant layer on top of the regex gate, not a replacement — the
+  // regex gate still runs first and unconditionally, with zero LLM
+  // dependency. Optional so pre-existing callers/tests default safely to
+  // false rather than crashing on a missing field.
+  crisisLanguageDetected?: boolean;
 }
 
 const PATIENT_SYMPTOM_SCHEMA = {
@@ -109,8 +122,23 @@ const PATIENT_SYMPTOM_SCHEMA = {
       type: "boolean",
       description: "True if the message ALSO touches a second, different kind of need beyond the primary needCategory.",
     },
+    crisisLanguageDetected: {
+      type: "boolean",
+      description:
+        "True if the message expresses any indication of suicidal ideation, self-harm, or wanting to die/not wanting to be alive — in ANY language, including indirect or paraphrased expressions, not just explicit statements. This is a safety flag for immediate human routing, not a diagnosis. When genuinely uncertain, prefer true (a human reviewing a false alarm costs little; missing a real one does not).",
+    },
   },
-  required: ["pain", "nausea", "fatigue", "feverF", "feverMentioned", "summary", "needCategory", "hasAdditionalNeeds"],
+  required: [
+    "pain",
+    "nausea",
+    "fatigue",
+    "feverF",
+    "feverMentioned",
+    "summary",
+    "needCategory",
+    "hasAdditionalNeeds",
+    "crisisLanguageDetected",
+  ],
   additionalProperties: false,
 } as const;
 
@@ -130,9 +158,15 @@ decision — you are identifying what the message is about, not deciding what sh
 describes ANY physical symptom, even mild, choose CLINICAL even if they also mention something else (set
 hasAdditionalNeeds to true in that case). Prefer UNCERTAIN over guessing when the message is genuinely ambiguous.
 
+Also set crisisLanguageDetected to true if the message expresses ANY indication of suicidal ideation, self-harm, or
+not wanting to be alive/wanting to die — however it's phrased, directly or indirectly, in whatever language. This is
+independent of needCategory (it can be true alongside any category) and independent of how confident you are about
+the rest of the message — flag it even if everything else about the message is unclear.
+
 The patient's message may be written in English, French, or Spanish (CareSignal serves a Louisiana population that
-includes French and Spanish speakers). Extract the same fields regardless of the message's language. Always write
-the "summary" field in English, since it's read by the English-speaking clinical care team.`;
+includes French and Spanish speakers). Extract the same fields regardless of the message's language, including
+crisis-language detection — watch for it equally in all three languages. Always write the "summary" field in
+English, since it's read by the English-speaking clinical care team.`;
 
 export async function parsePatientSymptomText(text: string): Promise<ParsedPatientSymptoms> {
   const openai = getClient();
@@ -170,6 +204,7 @@ export async function parsePatientSymptomText(text: string): Promise<ParsedPatie
     // back to UNCERTAIN rather than trust an unvalidated string.
     needCategory: isNeedCategory(parsed.needCategory) ? parsed.needCategory : "UNCERTAIN",
     hasAdditionalNeeds: Boolean(parsed.hasAdditionalNeeds),
+    crisisLanguageDetected: Boolean(parsed.crisisLanguageDetected),
   };
 }
 
@@ -180,6 +215,13 @@ export interface ParsedCaregiverMessage {
   summary: string;
   needCategory?: NeedCategory;
   hasAdditionalNeeds?: boolean;
+  // Same field, same purpose as ParsedPatientSymptoms above — a caregiver's
+  // own message can express crisis language about THEMSELVES (not just
+  // relaying the patient's), and lib/safetyGate.ts's regex gate already
+  // treats caregiver crisis language as attaching to the patient's safety
+  // record (see recordSafetyAlert callers) — this is the same redundant
+  // second layer for that path.
+  crisisLanguageDetected?: boolean;
 }
 
 const CAREGIVER_MESSAGE_SCHEMA = {
@@ -218,8 +260,21 @@ const CAREGIVER_MESSAGE_SCHEMA = {
       type: "boolean",
       description: "True if the message ALSO touches a second, different kind of need beyond the primary needCategory.",
     },
+    crisisLanguageDetected: {
+      type: "boolean",
+      description:
+        "True if the message expresses any indication of suicidal ideation, self-harm, or wanting to die/not wanting to be alive — about the PATIENT or the CAREGIVER themselves, in ANY language, including indirect or paraphrased expressions. Safety flag for immediate human routing, not a diagnosis. When genuinely uncertain, prefer true.",
+    },
   },
-  required: ["intent", "patientSymptoms", "caregiverCoping", "summary", "needCategory", "hasAdditionalNeeds"],
+  required: [
+    "intent",
+    "patientSymptoms",
+    "caregiverCoping",
+    "summary",
+    "needCategory",
+    "hasAdditionalNeeds",
+    "crisisLanguageDetected",
+  ],
   additionalProperties: false,
 } as const;
 
@@ -245,10 +300,15 @@ is a routing label, not a diagnosis or a clinical decision. If any physical symp
 even if the message also touches something else (set hasAdditionalNeeds to true in that case). Prefer UNCERTAIN
 over guessing.
 
+Also set crisisLanguageDetected to true if the message expresses ANY indication of suicidal ideation, self-harm, or
+not wanting to be alive/wanting to die — about the PATIENT or about the CAREGIVER themselves, however it's phrased,
+directly or indirectly, in whatever language. This is independent of needCategory and independent of intent — flag
+it regardless of which of PATIENT_SYMPTOMS/CAREGIVER_COPING/BOTH/UNCLEAR applies.
+
 The caregiver's message may be written in English, French, or Spanish (CareSignal serves a Louisiana population that
 includes French and Spanish speakers). Extract the same fields regardless of the message's language — watch for the
-same burden/exhaustion signals whether expressed in English, French, or Spanish. Always write the "summary" field in
-English, since it's read by the English-speaking clinical care team.`;
+same burden/exhaustion signals and the same crisis-language signals whether expressed in English, French, or
+Spanish. Always write the "summary" field in English, since it's read by the English-speaking clinical care team.`;
 
 export async function parseCaregiverMessageText(text: string): Promise<ParsedCaregiverMessage> {
   const openai = getClient();
@@ -291,6 +351,7 @@ export async function parseCaregiverMessageText(text: string): Promise<ParsedCar
     summary: parsed.summary,
     needCategory: isNeedCategory(parsed.needCategory) ? parsed.needCategory : "UNCERTAIN",
     hasAdditionalNeeds: Boolean(parsed.hasAdditionalNeeds),
+    crisisLanguageDetected: Boolean(parsed.crisisLanguageDetected),
   };
 }
 

@@ -126,6 +126,23 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         needCategory: parsed.needCategory,
         treatmentFrequency: sender.patient.treatmentFrequency as TreatmentFrequency,
       });
+      // Second, LLM-based crisis layer — catches what the deterministic
+      // regex gate above missed (paraphrases, indirect phrasing, or a
+      // language the regex list doesn't cover). Runs on the SAME parse
+      // call already made above, not an extra Groq request. Checked
+      // independently of needCategory/riskAckMessage below: a message can
+      // be needCategory=EMOTIONAL (or anything else) AND crisisLanguageDetected
+      // — the crisis signal always wins on what the patient is told, never
+      // the reverse. The symptom log above is still recorded either way, so
+      // no data is discarded when this fires.
+      if (parsed.crisisLanguageDetected) {
+        await recordSafetyAlert({
+          patientId: sender.patient.id,
+          rawSmsText: body,
+          reason: "AI-detected crisis language (not matched by the deterministic keyword gate) — see lib/ai.ts's crisisLanguageDetected field.",
+        });
+        return twiml(t("safetyGate", lang, { clinicPhone: clinicTriagePhone() }));
+      }
       const needAck = parsed.needCategory ? needAckMessage(parsed.needCategory, lang) : null;
       return twiml(needAck ?? riskAckMessage(assessment, lang));
     } catch (err) {
@@ -193,6 +210,24 @@ async function handleMessage(sender: Sender, body: string, lang: Lang): Promise<
         rawSmsText: body,
       });
       burdenFlagged = result.burdenFlagged;
+    }
+
+    // Second, LLM-based crisis layer, same purpose and same "never
+    // downgrade" rule as the patient path above — checked before the
+    // "couldn't tell what this was about" fallback below, so a message
+    // that's crisis language but doesn't clearly parse as either symptoms
+    // or coping (e.g. a caregiver saying only "I can't do this anymore" in
+    // a language/phrasing the regex gate didn't catch) still gets the
+    // safety reply, not a "could you say more" clarifying question. Real
+    // data already recorded above either way, so nothing is lost by
+    // additionally firing this.
+    if (parsed.crisisLanguageDetected) {
+      await recordSafetyAlert({
+        patientId: sender.patient.id,
+        rawSmsText: body,
+        reason: "AI-detected crisis language (caregiver message, not matched by the deterministic keyword gate) — see lib/ai.ts's crisisLanguageDetected field.",
+      });
+      return twiml(t("safetyGate", lang, { clinicPhone: clinicTriagePhone() }));
     }
 
     // Not an error — this is the model genuinely unable to tell what the
