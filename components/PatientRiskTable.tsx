@@ -16,6 +16,7 @@ export interface QueuePatient {
   riskScore: number;
   hospitalizationRiskScore: number;
   hasCaregiverBurden: boolean;
+  hasOpenCareNeed: boolean;
 }
 
 // One unified card per patient — clinical status and caregiver-burden
@@ -74,14 +75,30 @@ export function PatientRiskTable({
               </div>
             </div>
 
-            {(isDual || isHospWatch) && (
-              <span
-                className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--viz-series-fever)]/35 bg-[var(--viz-series-fever)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--viz-series-fever)]"
-                title="Daily clinical risk AND 7-day hospitalization risk are both elevated — shown as one notification, not two."
-              >
-                {isDual ? "+ " : ""}7-day risk{" "}
-                <span className="font-mono tabular-nums">{(p.hospitalizationRiskScore * 100).toFixed(0)}%</span>
-              </span>
+            {(isDual || isHospWatch || p.hasOpenCareNeed) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(isDual || isHospWatch) && (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--viz-series-fever)]/35 bg-[var(--viz-series-fever)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--viz-series-fever)]"
+                  title="Daily clinical risk AND 7-day hospitalization risk are both elevated — shown as one notification, not two."
+                >
+                  {isDual ? "+ " : ""}7-day risk{" "}
+                  <span className="font-mono tabular-nums">{(p.hospitalizationRiskScore * 100).toFixed(0)}%</span>
+                </span>
+              )}
+              {/* Non-clinical care need (logistical/emotional/financial/uncertain/safety)
+                  — visible on the queue itself, not only after opening the patient, so
+                  a nurse scanning rows doesn't have to click into every card to find
+                  these. Category/why detail is in the patient panel. */}
+              {p.hasOpenCareNeed && (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--viz-caregiver-burden)]/35 bg-[var(--viz-caregiver-burden)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--viz-caregiver-burden)]"
+                  title="A non-clinical care need is open for this patient — see the patient panel for what kind and why."
+                >
+                  + Care need
+                </span>
+              )}
+            </div>
             )}
           </button>
         );

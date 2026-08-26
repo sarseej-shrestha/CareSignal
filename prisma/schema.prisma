@@ -54,6 +54,7 @@ model SymptomLog {
   rawSmsText String?
   parsedByAi Boolean  @default(false) // true if LLM-parsed from freeform text
   source     String   @default("PATIENT_SMS") // PATIENT_SMS, CAREGIVER_SMS, WEB
+  needCategory String @default("CLINICAL") // CLINICAL | LOGISTICAL | EMOTIONAL | FINANCIAL | ROUTINE | UNCERTAIN — see lib/needCategory.ts. LLM-derived for freeform text, deterministically CLINICAL for structured numeric reports.
   createdAt  DateTime @default(now())
 }
 

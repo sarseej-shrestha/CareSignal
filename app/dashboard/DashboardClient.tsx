@@ -7,6 +7,9 @@ import { Separator } from "@/components/ui/separator";
 import { PatientRiskTable, type QueuePatient } from "@/components/PatientRiskTable";
 import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendChart";
 import { RiskBadge } from "@/components/RiskBadge";
+import { CareNeedBadge } from "@/components/CareNeedBadge";
+import { AlertStatusControl } from "@/components/AlertStatusControl";
+import type { ClinicalSnapshot } from "@/lib/clinicalSnapshot";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
 import { LimitationsPanel } from "@/components/LimitationsPanel";
@@ -47,6 +50,15 @@ export interface DashboardPatient extends QueuePatient {
     logs: CaregiverLogView[];
   } | null;
   caregiverBurdenReasons: string[] | null;
+  clinicalSnapshot: ClinicalSnapshot | null;
+  clinicalAlertId: string | null;
+  clinicalAlertStatus: string | null;
+  burdenAlertId: string | null;
+  burdenAlertStatus: string | null;
+  // Non-clinical needs (LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN/SAFETY),
+  // routed outside the clinical risk score — see lib/needCategory.ts and
+  // lib/safetyGate.ts. Never blended into riskStatus/riskScore.
+  careNeeds: { id: string; category: string; reasons: string[]; status: string; dateLabel: string }[];
   // hospitalizationRiskScore is inherited from QueuePatient — separate
   // model, separate time horizon (7-day forecast, not today's status),
   // never merged into riskStatus/riskScore.
@@ -134,6 +146,57 @@ export function DashboardClient({
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
+            {/* At-a-glance clinical snapshot — what the patient actually
+                said, when, and how that compares to their own recent
+                baseline (real deltas, same math as the risk engine's own
+                3-day trend rule, not a new chart or a new data source).
+                Answers "why am I seeing this, what changed" before the
+                clinician reads anything else. */}
+            {selected.clinicalSnapshot && (
+              <div className="rounded-lg border border-dashed p-3">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Latest check-in · {selected.clinicalSnapshot.latestDateLabel}
+                  </span>
+                  <SourceBadge
+                    source={selected.clinicalSnapshot.latestSource as LogSource}
+                    parsedByAi={selected.clinicalSnapshot.parsedByAi}
+                  />
+                </div>
+                {selected.clinicalSnapshot.latestRawText && (
+                  <p className="mb-2 flex items-start gap-1.5 text-sm italic text-muted-foreground">
+                    <MessageCircle className="mt-0.5 size-3.5 shrink-0" />
+                    &ldquo;{selected.clinicalSnapshot.latestRawText}&rdquo;
+                  </p>
+                )}
+                {selected.clinicalSnapshot.deltas ? (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {(["pain", "nausea", "fatigue"] as const).map((dim) => {
+                      const delta = selected.clinicalSnapshot!.deltas![dim];
+                      if (Math.abs(delta) < 0.5) return null;
+                      return (
+                        <span key={dim} className={delta > 0 ? "font-medium text-[var(--viz-status-critical)]" : undefined}>
+                          {delta > 0 ? "↑" : "↓"} {dim} {Math.abs(delta).toFixed(1)} pts vs. recent baseline
+                        </span>
+                      );
+                    })}
+                    {Math.abs(selected.clinicalSnapshot.deltas.fever) >= 0.5 && (
+                      <span
+                        className={
+                          selected.clinicalSnapshot.deltas.fever > 0 ? "font-medium text-[var(--viz-status-critical)]" : undefined
+                        }
+                      >
+                        {selected.clinicalSnapshot.deltas.fever > 0 ? "↑" : "↓"} temp{" "}
+                        {Math.abs(selected.clinicalSnapshot.deltas.fever).toFixed(1)}° vs. recent baseline
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No baseline yet — this is an early check-in.</p>
+                )}
+              </div>
+            )}
+
             {/* The two "why" boxes, paired side by side — the same unified
                 pairing as the queue card above, carried into the detail
                 view. Clinical risk is rules-based and the most defensible
@@ -144,7 +207,12 @@ export function DashboardClient({
               <div className="flex flex-col gap-3 sm:flex-row">
                 {selected.reasons.length > 0 && (
                   <div className="rounded-lg border bg-muted/30 p-3 sm:flex-1">
-                    <div className="mb-1.5 text-xs font-medium text-muted-foreground">Why this risk level</div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">Why this risk level</span>
+                      {selected.clinicalAlertId && selected.clinicalAlertStatus && (
+                        <AlertStatusControl alertId={selected.clinicalAlertId} status={selected.clinicalAlertStatus} />
+                      )}
+                    </div>
                     <ul className="list-disc space-y-0.5 pl-5 text-sm">
                       {selected.reasons.map((r) => (
                         <li key={r}>{r}</li>
@@ -154,9 +222,14 @@ export function DashboardClient({
                 )}
                 {selected.caregiverBurdenReasons && (
                   <div className="rounded-lg border border-[var(--viz-caregiver-burden)]/30 bg-[var(--viz-caregiver-burden)]/5 p-3 sm:flex-1">
-                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[var(--viz-caregiver-burden)]">
-                      <HeartHandshake className="size-3.5" />
-                      Why caregiver burden is flagged
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--viz-caregiver-burden)]">
+                        <HeartHandshake className="size-3.5" />
+                        Why caregiver burden is flagged
+                      </span>
+                      {selected.burdenAlertId && selected.burdenAlertStatus && (
+                        <AlertStatusControl alertId={selected.burdenAlertId} status={selected.burdenAlertStatus} />
+                      )}
                     </div>
                     <ul className="list-disc space-y-0.5 pl-5 text-sm">
                       {selected.caregiverBurdenReasons.map((r) => (
@@ -165,6 +238,35 @@ export function DashboardClient({
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Non-clinical needs — logistical/emotional/financial/uncertain/
+                safety — routed here by category (lib/needCategory.ts), never
+                blended into the clinical risk score above. Each one shows
+                WHAT it is (category badge), WHY (the actual message), and its
+                current status, same "why" visual language as the clinical
+                and caregiver boxes above, kept as its own section since it's
+                a different kind of signal, not a severity level. */}
+            {selected.careNeeds.length > 0 && (
+              <div className="flex flex-col gap-3">
+                <div className="text-xs font-medium text-muted-foreground">Care needs</div>
+                {selected.careNeeds.map((need) => (
+                  <div key={need.id} className="rounded-lg border p-3">
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <CareNeedBadge category={need.category} />
+                        <span className="text-xs text-muted-foreground">{need.dateLabel}</span>
+                      </div>
+                      <AlertStatusControl alertId={need.id} status={need.status} />
+                    </div>
+                    <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                      {need.reasons.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             )}
 

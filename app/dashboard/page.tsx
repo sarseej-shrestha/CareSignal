@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { computeHospitalizationRisk, hospitalizationFactors } from "@/lib/hospitalizationRisk";
+import { computeClinicalSnapshot } from "@/lib/clinicalSnapshot";
 import { DashboardClient, type DashboardPatient } from "./DashboardClient";
 
 export const metadata: Metadata = {
@@ -9,6 +10,14 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = "force-dynamic";
+
+// Every RiskAlert.level that represents a care need routed OUTSIDE the
+// clinical YELLOW/RED pathway — see lib/needCategory.ts for the
+// classification these come from, and lib/safetyGate.ts for SAFETY
+// specifically (a deterministic gate, not an LLM-classified category, but
+// surfaced through the same alert mechanism since it's the same "needs a
+// human, isn't a symptom score" shape).
+const CARE_NEED_LEVELS = ["LOGISTICAL", "EMOTIONAL", "FINANCIAL", "UNCERTAIN", "SAFETY"];
 
 function formatDateLabel(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -34,6 +43,11 @@ export default async function DashboardPage({
   const dashboardPatients: DashboardPatient[] = patients.map((p, idx) => {
     const clinicalAlert = p.alerts.find((a) => a.level === "YELLOW" || a.level === "RED");
     const burdenAlert = p.alerts.find((a) => a.level === "CAREGIVER_BURDEN");
+    // Stays visible through OPEN -> ACKNOWLEDGED so claiming it doesn't make
+    // it vanish before it's actually done — only RESOLVED drops it off the
+    // active queue (hasOpenCareNeed below reflects the same "not resolved
+    // yet" definition, not just "brand new").
+    const careNeedAlerts = p.alerts.filter((a) => CARE_NEED_LEVELS.includes(a.level) && a.status !== "RESOLVED");
     const hosp = hospResults[idx];
 
     return {
@@ -48,10 +62,13 @@ export default async function DashboardPage({
       riskStatus: p.riskStatus as "GREEN" | "YELLOW" | "RED",
       riskScore: p.riskScore,
       hasCaregiverBurden: !!burdenAlert,
+      hasOpenCareNeed: careNeedAlerts.length > 0,
       hospitalizationRiskScore: hosp.score,
       hospitalizationRiskFactors: hospitalizationFactors(hosp.inputs),
       hospitalizationHasRecentHistory: hosp.hasRecentHistory,
       reasons: clinicalAlert ? (JSON.parse(clinicalAlert.reasons) as string[]) : [],
+      clinicalAlertId: clinicalAlert?.id ?? null,
+      clinicalAlertStatus: clinicalAlert?.status ?? null,
       logs: p.symptomLogs.map((log) => ({
         date: log.createdAt.toISOString(),
         label: formatDateLabel(log.createdAt),
@@ -93,7 +110,17 @@ export default async function DashboardPage({
               })),
           }
         : null,
+      clinicalSnapshot: computeClinicalSnapshot(p.symptomLogs, formatDateLabel),
       caregiverBurdenReasons: burdenAlert ? (JSON.parse(burdenAlert.reasons) as string[]) : null,
+      burdenAlertId: burdenAlert?.id ?? null,
+      burdenAlertStatus: burdenAlert?.status ?? null,
+      careNeeds: careNeedAlerts.map((a) => ({
+        id: a.id,
+        category: a.level,
+        reasons: JSON.parse(a.reasons) as string[],
+        status: a.status,
+        dateLabel: formatDateLabel(a.createdAt),
+      })),
     };
   });
 
