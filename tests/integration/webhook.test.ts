@@ -716,6 +716,131 @@ describe("POST /api/twilio/inbound — LLM-based crisis detection (multilingual 
   });
 });
 
+// Semifinal closed-loop feature: every inbound message, through the SAME
+// unmodified pipeline above, now also leaves a CommunicationMessage row.
+// This is a persistence side effect, not a new code path — these tests
+// confirm the mirroring happens, not that behavior changed.
+describe("POST /api/twilio/inbound — inbound communication persistence", () => {
+  it("a structured patient SMS creates an INBOUND CommunicationMessage for PATIENT", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551600" });
+    await POST(formRequest({ From: "+19995551600", To: "+1900", Body: "3,2,4,98.6" }));
+    const rows = await prisma.communicationMessage.findMany({ where: { patientId: patient.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].direction).toBe("INBOUND");
+    expect(rows[0].participant).toBe("PATIENT");
+    expect(rows[0].body).toBe("3,2,4,98.6");
+  });
+
+  it("a structured caregiver SMS creates an INBOUND CommunicationMessage for CAREGIVER", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551601" });
+    await seedTestCaregiver(patient.id, { phone: "+19995551602" });
+    await POST(formRequest({ From: "+19995551602", To: "+1900", Body: "3,2" }));
+    const rows = await prisma.communicationMessage.findMany({ where: { patientId: patient.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].participant).toBe("CAREGIVER");
+  });
+
+  it("an unrecognized sender creates no CommunicationMessage (nothing to attach it to)", async () => {
+    await POST(formRequest({ From: "+19995559999", To: "+1900", Body: "hello" }));
+    expect(await prisma.communicationMessage.count()).toBe(0);
+  });
+
+  it("a deterministic-safety-gate crisis message still creates a CommunicationMessage (via recordSafetyAlert)", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551603" });
+    await POST(formRequest({ From: "+19995551603", To: "+1900", Body: "I don't want to live anymore" }));
+    const rows = await prisma.communicationMessage.findMany({ where: { patientId: patient.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].participant).toBe("PATIENT");
+  });
+});
+
+// The most important safety property of this whole feature: a patient
+// replying to a clinician's outbound message is NOT a different code path
+// from any other inbound SMS. These simulate the exact scenario the task
+// calls out — a prior clinician message exists in the conversation, and the
+// next inbound message is crisis language — and confirm the SAME
+// deterministic gate fires exactly as it would with no prior conversation
+// at all. Multilingual case included: the semifinal-hardening pass's
+// French/Spanish regex patterns and the LLM-based crisisLanguageDetected
+// layer are both exercised here completely unchanged.
+describe("POST /api/twilio/inbound — safety detection is unaffected by prior conversation context", () => {
+  it("a crisis reply after a clinician's outbound message still triggers the safety gate (English)", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551610" });
+    // Simulate a clinician's prior outbound message already in the thread —
+    // this must not soften or bypass the gate for the next inbound message.
+    await prisma.communicationMessage.create({
+      data: {
+        patientId: patient.id,
+        participant: "PATIENT",
+        direction: "OUTBOUND",
+        body: "How are you feeling now?",
+        status: "SENT",
+      },
+    });
+
+    const res = await POST(formRequest({ From: "+19995551610", To: "+1900", Body: "I want to die" }));
+    const xml = await res.text();
+    expect(xml).toContain("911");
+    expect(xml).toContain("988");
+    const safetyAlerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id, level: "SAFETY" } });
+    expect(safetyAlerts).toHaveLength(1);
+  });
+
+  it("a French crisis reply after a clinician's outbound message still triggers the safety gate", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551611", preferredLanguage: "fr" });
+    await prisma.communicationMessage.create({
+      data: {
+        patientId: patient.id,
+        participant: "PATIENT",
+        direction: "OUTBOUND",
+        body: "Comment vous sentez-vous maintenant ?",
+        status: "SENT",
+      },
+    });
+
+    const res = await POST(
+      formRequest({ From: "+19995551611", To: "+1900", Body: "Je veux mourir, je n'en peux plus" })
+    );
+    const xml = await res.text();
+    expect(xml).toContain("911");
+    const safetyAlerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id, level: "SAFETY" } });
+    expect(safetyAlerts).toHaveLength(1);
+  });
+
+  it("a non-crisis reply after a clinician's outbound message is NOT escalated (no false positive from conversation framing)", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551612" });
+    vi.mocked(parsePatientSymptomText).mockResolvedValueOnce({
+      pain: 8,
+      nausea: 2,
+      fatigue: 3,
+      fever: 98.6,
+      feverMentioned: false,
+      summary: "Patient reports pain worsening to 8/10",
+      needCategory: "CLINICAL",
+      hasAdditionalNeeds: false,
+      crisisLanguageDetected: false,
+    });
+    await prisma.communicationMessage.create({
+      data: {
+        patientId: patient.id,
+        participant: "PATIENT",
+        direction: "OUTBOUND",
+        body: "Can you tell us whether the pain is getting worse?",
+        status: "SENT",
+      },
+    });
+
+    const res = await POST(
+      formRequest({ From: "+19995551612", To: "+1900", Body: "It's worse now, about 8 out of 10" })
+    );
+    const xml = await res.text();
+    expect(xml).not.toContain("988");
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id, level: "SAFETY" } })).toBe(0);
+    const log = await prisma.symptomLog.findFirst({ where: { patientId: patient.id } });
+    expect(log?.pain).toBe(8);
+  });
+});
+
 // Every test above runs without TWILIO_AUTH_TOKEN set, which already
 // exercises the "skip validation, demo mode" path on every request (all of
 // them return 200 with no signature header at all). These tests cover the
