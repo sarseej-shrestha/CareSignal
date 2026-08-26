@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { PatientRiskTable, type QueuePatient } from "@/components/PatientRiskTable";
 import { SymptomTrendChart, type TrendPoint } from "@/components/SymptomTrendChart";
 import { RiskBadge } from "@/components/RiskBadge";
+import { CareNeedBadge } from "@/components/CareNeedBadge";
 import { SourceBadge, type LogSource } from "@/components/SourceBadge";
 import { DemoControls } from "@/components/DemoControls";
 import { LimitationsPanel } from "@/components/LimitationsPanel";
@@ -47,6 +48,10 @@ export interface DashboardPatient extends QueuePatient {
     logs: CaregiverLogView[];
   } | null;
   caregiverBurdenReasons: string[] | null;
+  // Non-clinical needs (LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN/SAFETY),
+  // routed outside the clinical risk score — see lib/needCategory.ts and
+  // lib/safetyGate.ts. Never blended into riskStatus/riskScore.
+  careNeeds: { id: string; category: string; reasons: string[]; status: string; dateLabel: string }[];
   // hospitalizationRiskScore is inherited from QueuePatient — separate
   // model, separate time horizon (7-day forecast, not today's status),
   // never merged into riskStatus/riskScore.
@@ -165,6 +170,34 @@ export function DashboardClient({
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Non-clinical needs — logistical/emotional/financial/uncertain/
+                safety — routed here by category (lib/needCategory.ts), never
+                blended into the clinical risk score above. Each one shows
+                WHAT it is (category badge), WHY (the actual message), and its
+                current status, same "why" visual language as the clinical
+                and caregiver boxes above, kept as its own section since it's
+                a different kind of signal, not a severity level. */}
+            {selected.careNeeds.length > 0 && (
+              <div className="flex flex-col gap-3">
+                <div className="text-xs font-medium text-muted-foreground">Care needs</div>
+                {selected.careNeeds.map((need) => (
+                  <div key={need.id} className="rounded-lg border p-3">
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <CareNeedBadge category={need.category} />
+                      <span className="text-xs text-muted-foreground">
+                        {need.dateLabel} · {need.status}
+                      </span>
+                    </div>
+                    <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                      {need.reasons.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             )}
 

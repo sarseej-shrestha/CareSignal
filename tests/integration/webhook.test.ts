@@ -402,6 +402,23 @@ describe("POST /api/twilio/inbound — need classification", () => {
     expect(log?.needCategory).toBe("CLINICAL");
   });
 
+  it("creates an OPEN care-need alert for a non-clinical, non-routine category", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551508" });
+    mockPatientParse({ needCategory: "LOGISTICAL" });
+    await POST(formRequest({ From: "+19995551508", To: "+1900", Body: "I can't get a ride to my appointment" }));
+    const alerts = await prisma.riskAlert.findMany({ where: { patientId: patient.id } });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].level).toBe("LOGISTICAL");
+    expect(alerts[0].status).toBe("OPEN");
+  });
+
+  it("creates no alert for ROUTINE (acknowledged, no action required)", async () => {
+    const patient = await seedTestPatient({ phone: "+19995551509" });
+    mockPatientParse({ needCategory: "ROUTINE" });
+    await POST(formRequest({ From: "+19995551509", To: "+1900", Body: "feeling fine today" }));
+    expect(await prisma.riskAlert.count({ where: { patientId: patient.id } })).toBe(0);
+  });
+
   it("defaults structured numeric reports to CLINICAL without calling the LLM", async () => {
     const patient = await seedTestPatient({ phone: "+19995551507" });
     await POST(formRequest({ From: "+19995551507", To: "+1900", Body: "3,2,4,98.6" }));

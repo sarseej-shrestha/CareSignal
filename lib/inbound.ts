@@ -42,6 +42,8 @@ export async function recordSymptomLog(params: {
   // real value, from lib/ai.ts's needCategory field.
   needCategory?: NeedCategory;
 }): Promise<RiskAssessment> {
+  const needCategory = params.needCategory ?? "CLINICAL";
+
   await prisma.symptomLog.create({
     data: {
       patientId: params.patientId,
@@ -52,9 +54,27 @@ export async function recordSymptomLog(params: {
       source: params.source,
       rawSmsText: params.rawSmsText ?? null,
       parsedByAi: params.parsedByAi ?? false,
-      needCategory: params.needCategory ?? "CLINICAL",
+      needCategory,
     },
   });
+
+  // Non-clinical needs get their own alert, same pattern as CAREGIVER_BURDEN
+  // below: a distinct RiskAlert.level, never blended into the clinical
+  // YELLOW/RED score. ROUTINE deliberately creates nothing — "acknowledged,
+  // no action required" (see lib/needCategory.ts) — everything else
+  // (LOGISTICAL/EMOTIONAL/FINANCIAL/UNCERTAIN) surfaces on the same queue a
+  // clinical alert would, routed by category instead of severity.
+  if (needCategory !== "CLINICAL" && needCategory !== "ROUTINE" && params.rawSmsText) {
+    await prisma.riskAlert.create({
+      data: {
+        patientId: params.patientId,
+        level: needCategory,
+        reasons: JSON.stringify([`Message: "${params.rawSmsText}"`]),
+        modelProb: null,
+        status: "OPEN",
+      },
+    });
+  }
 
   const logs = await prisma.symptomLog.findMany({
     where: { patientId: params.patientId },
