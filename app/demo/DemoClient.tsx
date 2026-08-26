@@ -101,7 +101,9 @@ function ProgressStepper({ stage }: { stage: Stage }) {
             >
               {i + 1}
             </span>
-            <span className={i <= active ? "font-medium text-foreground" : "text-muted-foreground"}>{label}</span>
+            <span className={`whitespace-nowrap ${i <= active ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+              {label}
+            </span>
           </div>
           {i < STEPS.length - 1 && <span className="h-px flex-1 bg-border" />}
         </div>
